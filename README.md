@@ -2,8 +2,13 @@
 
 `fetch-mix` is a command-line tool with AI agent support for bedroom and amateur DJs to find, extract, and download full tracklists from DJ sets, mixes, and YouTube videos.
 
-> **⚠️ Intended Audience & Legal Disclaimer:**  
+> [!IMPORTANT]
+> **Intended Audience & Legal Disclaimer:**  
 > `fetch-mix` is strictly intended for **amateur and bedroom DJs** practicing at home or playing non-commercial sets who are not seeking to become professional DJs. **Working professional DJs and commercial performers must source music from legitimate commercial sources** (such as Beatport, Bandcamp purchases, Juno Download, iTunes, or authorized record pools).
+
+> [!WARNING]
+> **Why Downloads Take Time (Avoiding Temporary IP Bans):**  
+> Platforms like YouTube and SoundCloud will temporarily block your internet connection if songs are downloaded too quickly or all at once. To protect your connection and prevent download failures, `fetch-mix` downloads songs **one at a time with short pauses in between**. Please allow the download process to finish at its own pace and **avoid running multiple `fetch-mix` downloads simultaneously**.
 
 ## What It Does
 
@@ -45,6 +50,7 @@
 
 ### 3. Track Formatting & Download Execution
 
+- **Pacing & Anti-Ban Protection**: Single-track downloads run one at a time with short, randomized pauses between songs. This intentional pacing prevents platforms like YouTube and SoundCloud from temporarily blocking your internet connection or failing downloads on large sets. Avoid running multiple `fetch-mix` commands at the same time to prevent triggering rate limits.
 - **Timestamp Normalization**: If any track in the mix exceeds 1 hour in duration, all timestamps across the mix are padded to 8-character `[hh:mm:ss]` format (e.g. `[00:55:39]` through `[01:06:30]`). If under 1 hour, timestamps remain in 5-character `[mm:ss]` format.
 - **Resumable Manifest & Output Directory**: Tracks are saved into `cwd/{mix-title-from-youtube}`. A tracking manifest file (`mix_manifest.json`) is maintained inside the mix folder to map each track title to its actual saved file name on disk and track completion status (`pending`, `completed`, `failed`). If a download is interrupted, re-running the command reads the manifest, skips already completed tracks, and resumes from where it stopped.
 - **M3U Playlist Generation**: After single-track downloads complete via `fetch-track`, a `playlist.m3u` file is generated inside the mix folder containing the exact saved filenames in the chronological order of the mix.
@@ -165,22 +171,32 @@ Usage Examples:
 fetch-mix -o "my_sets/bicep" "Bicep Essential Mix 2014"
 ```
 
-### 5. Verify Installed Dependencies
+### 5. Managing Dependencies & Auto-Install
 
-Verify that `fetch-track`, `yt-dlp`, `ffmpeg`, and `firecrawl` are installed and meet minimum version requirements:
+Verify, install, or update required external dependencies (`fetch-track`, `yt-dlp`, `ffmpeg`, `firecrawl`):
 
 ```bash
+# Check status of required dependencies
 fetch-mix dependencies
+# Alias:
+fetch-mix deps
+
+# Auto-install all missing dependencies to ~/.local/share/fetch-mix/bin
+fetch-mix deps install
+
+# Update dependencies to their latest versions
+fetch-mix deps update
 ```
 
-Sample Output:
-```
-fetch-track: 1.3.0 (min 1.0.0) [OK]
-yt-dlp: 2026.07.04 (min 2024.08.01) [OK]
-ffmpeg: 8.1.2 (min 4.4) [OK]
-firecrawl: 1.0.0 (min 1.0.0) [OK]
+### 6. Upgrading `fetch-mix`
 
-All required dependencies are installed and operational.
+Upgrade the `fetch-mix` binary itself in-place to the latest release:
+
+```bash
+fetch-mix upgrade
+# Aliases:
+fetch-mix self-update
+fetch-mix update-self
 ```
 
 ## Options & Flags
@@ -189,6 +205,7 @@ All required dependencies are installed and operational.
 | :--- | :--- | :--- | :--- |
 | `--out-dir` | `-o` | `cwd/{mix-title}` | Folder where mix tracks are saved |
 | `--dry-run` | | `false` | Preview tracklist and download plan without downloading |
+| `--auto-install` | | `false` | Automatically install missing dependencies without prompting |
 | `--no-cache` | | `false` | Disable local caching for search queries, tracklists, and comments |
 | `--llm-provider` | `-p` | `auto` | LLM provider name (`auto`, `ollama`, `litellm`, `gemini`, `openai`, `anthropic`, `openrouter`, `deepseek`, `groq`, `custom`) |
 | `--llm-model` | `-m` | | LLM model name override (e.g. `gpt-4o-mini`, `claude-3-5-haiku-latest`, `llama3.2`) |

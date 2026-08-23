@@ -87,11 +87,34 @@ fetch-mix models
 ```
 Prints supported LLM providers, default models, required environment variables, and active API key detection status.
 
+### Dependencies Subcommand
+```bash
+fetch-mix dependencies
+# Aliases:
+fetch-mix deps
+
+# Auto-install missing dependencies to ~/.local/share/fetch-mix/bin
+fetch-mix deps install [dep...]
+
+# Update dependencies to their latest versions
+fetch-mix deps update [dep...]
+```
+
+### Upgrade Subcommand
+```bash
+fetch-mix upgrade
+# Aliases:
+fetch-mix self-update
+fetch-mix update-self
+```
+Upgrades the `fetch-mix` binary itself in-place from GitHub releases without using GitHub API.
+
 ### Flags
 | Flag | Short | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `--out-dir` | `-o` | `cwd/{mix-title}` | Custom output directory |
 | `--dry-run` | | `false` | Preview tracklist and download plan without downloading |
+| `--auto-install` | | `false` | Automatically install missing dependencies without prompting |
 | `--no-cache` | | `false` | Disable local caching for search, tracklists, and comments |
 | `--llm-provider` | `-p` | `auto` | LLM provider name (`auto`, `ollama`, `litellm`, `gemini`, `openai`, `anthropic`, `openrouter`, `deepseek`, `groq`, `custom`) |
 | `--llm-model` | `-m` | | LLM model name override (e.g. `gpt-4o-mini`, `claude-3-5-haiku-latest`, `llama3.2`) |
