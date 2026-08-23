@@ -59,7 +59,7 @@
 
 `fetch-mix` requires the following external binary dependencies installed on your system `$PATH`:
 
-- [`fetch-track`](https://github.com/alexgorbatchev/fetch-track-cli) (version 1.0.0 or newer) — for single-track acquisition
+- [`fetch-track`](https://github.com/alexgorbatchev/fetch-track-cli) (version 1.4.0 or newer) — for single-track acquisition
 - [`yt-dlp`](https://github.com/yt-dlp/yt-dlp#installation) (version 2024.08.01 or newer) — for YouTube comment extraction
 - [`ffmpeg`](https://ffmpeg.org/download.html) (version 4.4 or newer) — for audio processing
 - **LLM API Key / Endpoint** (optional, e.g. `GEMINI_API_KEY`, `OPENAI_API_KEY`, `OLLAMA_HOST`, etc.) — for LLM-driven tracklist extraction (`fetch-mix ai` for details)
@@ -163,13 +163,13 @@ Usage Examples:
 ==================================================
 ```
 
-### 4. Custom Output Directory
+### 5. Custom Output Directory
 
 ```bash
 fetch-mix -o "my_sets/bicep" "Bicep Essential Mix 2014"
 ```
 
-### 5. Managing Dependencies & Auto-Install
+### 6. Managing Dependencies & Auto-Install
 
 Verify, install, or update required external dependencies (`fetch-track`, `yt-dlp`, `ffmpeg`):
 
@@ -186,7 +186,7 @@ fetch-mix deps install
 fetch-mix deps update
 ```
 
-### 6. Upgrading `fetch-mix`
+### 7. Upgrading `fetch-mix`
 
 Upgrade the `fetch-mix` binary itself in-place to the latest release:
 

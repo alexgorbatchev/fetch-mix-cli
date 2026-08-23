@@ -51,7 +51,7 @@ fetch-mix-cli/
 
 The following external binaries must be available in `$PATH`:
 
-1. **`fetch-track`** (min version `1.0.0`): Single-track downloader pipeline.
+1. **`fetch-track`** (min version `1.4.0`): Single-track downloader pipeline.
 2. **`yt-dlp`** (min version `2024.08.01`): Comment fetcher and YouTube video query engine.
 3. **`ffmpeg`** (min version `4.4`): Audio stream processor.
 4. **`AGENT=1`**: Environment variable enabling agent mode (non-interactive auto-selection, structured machine-readable dependency output).
