@@ -44,6 +44,9 @@ var SupportedProviders = []ProviderInfo{
 }
 
 // GetProviderStatuses checks active environment variables and returns current status for all providers.
+// Active: Selected as default under auto-detection.
+// Detected: API key/endpoint present, but lower in auto-detection priority.
+// Not Detected: No API key or endpoint configured.
 func GetProviderStatuses() []ProviderInfo {
 	result := make([]ProviderInfo, len(SupportedProviders))
 	var defaultFound bool
@@ -59,13 +62,13 @@ func GetProviderStatuses() []ProviderInfo {
 			if p.Active {
 				if !defaultFound {
 					p.IsDefault = true
-					p.Status = "Active (Default)"
+					p.Status = "Active"
 					defaultFound = true
 				} else {
-					p.Status = "Active"
+					p.Status = "Detected"
 				}
 			} else {
-				p.Status = "Not Set (default: http://localhost:11434)"
+				p.Status = "Not Detected (default: http://localhost:11434)"
 			}
 		case "litellm":
 			if m := strings.TrimSpace(os.Getenv("LITELLM_MODEL")); m != "" {
@@ -75,26 +78,26 @@ func GetProviderStatuses() []ProviderInfo {
 			if p.Active {
 				if !defaultFound {
 					p.IsDefault = true
-					p.Status = "Active (Default)"
+					p.Status = "Active"
 					defaultFound = true
 				} else {
-					p.Status = "Active"
+					p.Status = "Detected"
 				}
 			} else {
-				p.Status = "Not Set (default: http://localhost:4000)"
+				p.Status = "Not Detected (default: http://localhost:4000)"
 			}
 		default:
 			p.Active = val != ""
 			if p.Active {
 				if !defaultFound {
 					p.IsDefault = true
-					p.Status = "Active (Default)"
+					p.Status = "Active"
 					defaultFound = true
 				} else {
-					p.Status = "Active"
+					p.Status = "Detected"
 				}
 			} else {
-				p.Status = "Not Set"
+				p.Status = "Not Detected"
 			}
 		}
 		result[i] = p

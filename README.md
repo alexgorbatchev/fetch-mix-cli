@@ -140,15 +140,15 @@ Supported LLM Providers & Models (auto-detection priority order):
 ==================================================
 PROVIDER       DEFAULT MODEL              ENV VAR              STATUS
 --------------------------------------------------
-ollama         llama3.2                   OLLAMA_HOST          Not Set (default: http://localhost:11434)
-litellm        gemini-2.5-flash           LITELLM_BASE_URL     Active (Default)
-gemini         gemini-2.5-flash           GEMINI_API_KEY       Active
-openai         gpt-4o-mini                OPENAI_API_KEY       Active
-anthropic      claude-3-5-haiku-latest    ANTHROPIC_API_KEY    Not Set
-openrouter     google/gemini-2.5-flash    OPENROUTER_API_KEY   Active
-deepseek       deepseek-chat              DEEPSEEK_API_KEY     Not Set
-groq           llama-3.3-70b-versatile    GROQ_API_KEY         Not Set
-custom         gpt-4o-mini                OPENAI_BASE_URL      Not Set
+ollama         llama3.2                   OLLAMA_HOST          Not Detected (default: http://localhost:11434)
+litellm        gemini-2.5-flash           LITELLM_BASE_URL     Active
+gemini         gemini-2.5-flash           GEMINI_API_KEY       Detected
+openai         gpt-4o-mini                OPENAI_API_KEY       Detected
+anthropic      claude-3-5-haiku-latest    ANTHROPIC_API_KEY    Not Detected
+openrouter     google/gemini-2.5-flash    OPENROUTER_API_KEY   Detected
+deepseek       deepseek-chat              DEEPSEEK_API_KEY     Not Detected
+groq           llama-3.3-70b-versatile    GROQ_API_KEY         Not Detected
+custom         gpt-4o-mini                OPENAI_BASE_URL      Not Detected
 ==================================================
 Usage Examples:
   fetch-mix youtube -p auto <url>
