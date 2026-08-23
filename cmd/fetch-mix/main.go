@@ -140,7 +140,7 @@ parses tracklists deterministically, and downloads individual tracks using fetch
 			sep := ui.Separator("=", 50)
 
 			fmt.Println(sep)
-			fmt.Println("Supported LLM Providers & Models:")
+			fmt.Println("Supported LLM Providers & Models (auto-detection priority order):")
 			fmt.Println(sep)
 			fmt.Printf("%-14s %-26s %-20s %s\n", "PROVIDER", "DEFAULT MODEL", "ENV VAR", "STATUS")
 			fmt.Println(ui.Separator("-", 50))

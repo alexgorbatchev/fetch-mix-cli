@@ -136,7 +136,7 @@ fetch-mix ai
 Sample Output:
 ```
 ==================================================
-Supported LLM Providers & Models:
+Supported LLM Providers & Models (auto-detection priority order):
 ==================================================
 PROVIDER       DEFAULT MODEL              ENV VAR              STATUS
 --------------------------------------------------
