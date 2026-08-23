@@ -150,15 +150,13 @@ deepseek       deepseek-chat              DEEPSEEK_API_KEY     Not Set
 groq           llama-3.3-70b-versatile    GROQ_API_KEY         Not Set
 custom         gpt-4o-mini                OPENAI_BASE_URL      Not Set
 ==================================================
-Auto-detection priority order:
-  1. ollama       (OLLAMA_HOST)
-  2. litellm      (LITELLM_BASE_URL)
-  3. gemini       (GEMINI_API_KEY)
-  4. openai       (OPENAI_API_KEY)
-  5. anthropic    (ANTHROPIC_API_KEY)
-  6. openrouter   (OPENROUTER_API_KEY)
-  7. deepseek     (DEEPSEEK_API_KEY)
-  8. groq         (GROQ_API_KEY)
+Usage Examples:
+  fetch-mix youtube -p auto <url>
+  fetch-mix youtube -p litellm -m gpt-4o-mini <url>
+  fetch-mix youtube -p ollama -m llama3.2 <url>
+  fetch-mix youtube -p openai -m gpt-4o-mini <url>
+  fetch-mix youtube -p anthropic -m claude-3-5-haiku-latest <url>
+==================================================
 ```
 
 ### 4. Custom Output Directory

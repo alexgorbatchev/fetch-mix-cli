@@ -150,14 +150,7 @@ parses tracklists deterministically, and downloads individual tracks using fetch
 			}
 
 			fmt.Println(sep)
-			fmt.Println("Auto-detection priority order:")
-			for i, p := range llm.SupportedProviders {
-				if p.ID == "custom" {
-					continue
-				}
-				fmt.Printf("  %d. %-12s (%s)\n", i+1, p.ID, p.EnvVar)
-			}
-			fmt.Println("\nUsage Examples:")
+			fmt.Println("Usage Examples:")
 			fmt.Println("  fetch-mix youtube -p auto <url>")
 			fmt.Println("  fetch-mix youtube -p litellm -m gpt-4o-mini <url>")
 			fmt.Println("  fetch-mix youtube -p ollama -m llama3.2 <url>")
