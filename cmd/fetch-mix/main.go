@@ -349,15 +349,15 @@ func ensureDependencies(ctx context.Context) error {
 		return nil
 	}
 
-	var missing []string
+	var unsatisfied []string
 	for _, r := range reports {
 		if !r.Satisfied {
-			missing = append(missing, r.Name)
+			unsatisfied = append(unsatisfied, r.Summary())
 		}
 	}
 
 	if autoInstall {
-		fmt.Printf("Auto-installing missing dependencies: %s...\n", strings.Join(missing, ", "))
+		fmt.Printf("Auto-installing missing/outdated dependencies: %s...\n", strings.Join(unsatisfied, ", "))
 		installed, installErr := deps.InstallMissingDependencies(ctx)
 		if installErr != nil {
 			return fmt.Errorf("auto-installing dependencies: %w", installErr)
@@ -370,11 +370,11 @@ func ensureDependencies(ctx context.Context) error {
 
 	if !deps.IsAgentMode() {
 		reader := bufio.NewReader(os.Stdin)
-		fmt.Printf("\nMissing required dependencies: %s\nWould you like to auto-install them to managed directory? [Y/n]: ", strings.Join(missing, ", "))
+		fmt.Printf("\nMissing or outdated dependencies: %s\nWould you like to auto-install them to managed directory? [Y/n]: ", strings.Join(unsatisfied, ", "))
 		ans, _ := reader.ReadString('\n')
 		ans = strings.TrimSpace(strings.ToLower(ans))
 		if ans == "" || ans == "y" || ans == "yes" {
-			fmt.Printf("Installing dependencies: %s...\n", strings.Join(missing, ", "))
+			fmt.Printf("Installing dependencies: %s...\n", strings.Join(unsatisfied, ", "))
 			installed, installErr := deps.InstallMissingDependencies(ctx)
 			if installErr != nil {
 				return fmt.Errorf("auto-installing dependencies: %w", installErr)

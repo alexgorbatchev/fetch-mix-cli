@@ -34,6 +34,56 @@ func TestIsAgentMode(t *testing.T) {
 	os.Unsetenv("AGENT")
 }
 
+func TestDependencyReport_Summary(t *testing.T) {
+	tests := []struct {
+		name   string
+		report DependencyReport
+		want   string
+	}{
+		{
+			name: "satisfied",
+			report: DependencyReport{
+				Name:            "fetch-track",
+				MinVersion:      "1.4.0",
+				DetectedVersion: "1.4.0",
+				Installed:       true,
+				Satisfied:       true,
+			},
+			want: "fetch-track (version 1.4.0, min 1.4.0)",
+		},
+		{
+			name: "installed but outdated",
+			report: DependencyReport{
+				Name:            "fetch-track",
+				MinVersion:      "1.4.0",
+				DetectedVersion: "1.3.0",
+				Installed:       true,
+				Satisfied:       false,
+			},
+			want: "fetch-track (installed 1.3.0, required >= 1.4.0)",
+		},
+		{
+			name: "not installed",
+			report: DependencyReport{
+				Name:       "yt-dlp",
+				MinVersion: "2024.08.01",
+				Installed:  false,
+				Satisfied:  false,
+			},
+			want: "yt-dlp (not installed, required >= 2024.08.01)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.report.Summary()
+			if got != tt.want {
+				t.Errorf("DependencyReport.Summary() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestParseVersionOutput(t *testing.T) {
 	tests := []struct {
 		dep   string

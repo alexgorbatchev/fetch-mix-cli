@@ -71,6 +71,20 @@ type DependencyReport struct {
 	Error           string `json:"error,omitempty"`
 }
 
+// Summary returns a human-readable summary of the dependency state.
+// If satisfied: "name (version <detected>, min <required>)"
+// If installed but outdated: "name (installed <detected>, required >= <required>)"
+// If not installed: "name (not installed, required >= <required>)"
+func (r DependencyReport) Summary() string {
+	if !r.Satisfied {
+		if r.Installed && r.DetectedVersion != "" {
+			return fmt.Sprintf("%s (installed %s, required >= %s)", r.Name, r.DetectedVersion, r.MinVersion)
+		}
+		return fmt.Sprintf("%s (not installed, required >= %s)", r.Name, r.MinVersion)
+	}
+	return fmt.Sprintf("%s (version %s, min %s)", r.Name, r.DetectedVersion, r.MinVersion)
+}
+
 func CheckDependencies(ctx context.Context, cacheInst ...*cache.Cache) error {
 	var c *cache.Cache
 	if len(cacheInst) > 0 {
@@ -168,7 +182,7 @@ func VerifyDependenciesWithRunner(ctx context.Context, runner CommandRunner, c *
 					if isAgent {
 						report.Error = fmt.Sprintf("%s version %s in $PATH is outdated. Ask user for confirmation to update %s to version %s or newer.", dep.Name, versionStr, dep.Name, dep.MinVersion)
 					} else {
-						report.Error = fmt.Sprintf("%s in $PATH must be version %s or newer", dep.Name, dep.MinVersion)
+						report.Error = fmt.Sprintf("%s in $PATH (version %s) is outdated, must be version %s or newer", dep.Name, versionStr, dep.MinVersion)
 					}
 				} else {
 					report.Satisfied = true

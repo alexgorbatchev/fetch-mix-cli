@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -438,6 +439,53 @@ func TestEnsureDependencies_Direct(t *testing.T) {
 	_ = ensureDependencies(canceledCtx)
 }
 
+func TestEnsureDependencies_FormattedOutput(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("FETCH_MIX_DEV", "0")
+	t.Setenv("XDG_CACHE_HOME", tempDir)
+
+	c, _ := cache.New()
+	if c != nil {
+		_ = c.Put("deps_fetch-track.json", "1.0.0") // Outdated (min 1.4.0)
+		_ = c.Put("deps_ffmpeg.json", "ffmpeg version 6.0")
+	}
+
+	canceledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	t.Setenv("AGENT", "0")
+
+	// Capture stdout
+	oldStdout := os.Stdout
+	rOut, wOut, _ := os.Pipe()
+	os.Stdout = wOut
+
+	// Provide empty input for stdin
+	rIn, wIn, _ := os.Pipe()
+	_ = wIn.Close()
+	oldStdin := os.Stdin
+	os.Stdin = rIn
+
+	defer func() {
+		os.Stdout = oldStdout
+		os.Stdin = oldStdin
+	}()
+
+	_ = ensureDependencies(canceledCtx)
+	_ = wOut.Close()
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, rOut)
+	output := buf.String()
+
+	if !strings.Contains(output, "fetch-track (installed 1.0.0, required >= 1.4.0)") {
+		t.Errorf("output missing expected installed/required version details, got:\n%s", output)
+	}
+	if !strings.Contains(output, "Missing or outdated dependencies:") {
+		t.Errorf("output missing expected prompt header, got:\n%s", output)
+	}
+}
+
 func TestCLI_Dependencies_Failures(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("FETCH_MIX_DEV", "0")
@@ -446,7 +494,7 @@ func TestCLI_Dependencies_Failures(t *testing.T) {
 	c, _ := cache.New()
 	if c != nil {
 		_ = c.Put("deps_fetch-track.json", "0.1.0") // Outdated
-		_ = c.Delete("deps_yt-dlp.json")             // Missing / error
+		_ = c.Delete("deps_yt-dlp.json")            // Missing / error
 	}
 
 	ctx := context.Background()
