@@ -104,6 +104,15 @@ func (c *Cache) Put(key string, data interface{}) error {
 	return nil
 }
 
+// Delete removes a cache entry file if it exists.
+func (c *Cache) Delete(key string) error {
+	filePath := filepath.Join(c.dir, key)
+	if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to delete cache file %q: %w", filePath, err)
+	}
+	return nil
+}
+
 // Path returns the full path for a key.
 func (c *Cache) Path(key string) string {
 	return filepath.Join(c.dir, key)
