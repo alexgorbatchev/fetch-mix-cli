@@ -30,7 +30,7 @@ type Dependency struct {
 var RequiredDependencies = []Dependency{
 	{
 		Name:       "fetch-track",
-		MinVersion: "0.1.0",
+		MinVersion: "1.0.0",
 		InstallURL: "https://github.com/alexgorbatchev/fetch-track-cli",
 	},
 	{
@@ -221,6 +221,10 @@ func ParseVersionOutput(depName, output string) string {
 			return match[1]
 		}
 	case "fetch-track", "firecrawl":
+		line = strings.TrimPrefix(line, depName)
+		line = strings.TrimSpace(line)
+		line = strings.TrimPrefix(line, "version")
+		line = strings.TrimSpace(line)
 		if line == "dev" || strings.HasPrefix(line, "v") {
 			return strings.TrimPrefix(line, "v")
 		}

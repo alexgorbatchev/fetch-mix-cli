@@ -120,6 +120,26 @@ func TestGenerateM3UPlaylist(t *testing.T) {
 	}
 }
 
+func TestFormatDuration(t *testing.T) {
+	tests := []struct {
+		sec  float64
+		want string
+	}{
+		{0, "0:00"},
+		{45, "0:45"},
+		{300, "5:00"},
+		{503, "8:23"},
+		{3665, "1:01:05"},
+	}
+
+	for _, tt := range tests {
+		got := formatDuration(tt.sec)
+		if got != tt.want {
+			t.Errorf("formatDuration(%f) = %q, want %q", tt.sec, got, tt.want)
+		}
+	}
+}
+
 func TestDownloadSetDryRun(t *testing.T) {
 	opts := DownloadOptions{
 		MixTitle:  "Bicep Essential Mix 2014",

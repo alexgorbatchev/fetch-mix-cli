@@ -38,8 +38,11 @@ func TestParseVersionOutput(t *testing.T) {
 		{"yt-dlp", "2024.08.01", "2024.08.01"},
 		{"ffmpeg", "ffmpeg version 6.0 Copyright (c) 2000-2023", "6.0"},
 		{"fetch-track", "dev\n", "dev"},
+		{"fetch-track", "1.3.0\n", "1.3.0"},
+		{"fetch-track", "fetch-track version 1.0.0\n", "1.0.0"},
 		{"fetch-track", "v1.2.3\n", "1.2.3"},
 		{"firecrawl", "1.0.0", "1.0.0"},
+		{"firecrawl", "firecrawl version 1.0.0", "1.0.0"},
 	}
 
 	for _, tt := range tests {

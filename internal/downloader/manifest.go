@@ -12,14 +12,19 @@ import (
 )
 
 type TrackManifestEntry struct {
-	Index        int    `json:"index"`
-	Artist       string `json:"artist"`
-	Title        string `json:"title"`
-	Timestamp    string `json:"timestamp,omitempty"`
-	RawString    string `json:"rawString"`
-	Status       string `json:"status"` // "pending", "completed", "failed"
-	ActualFile   string `json:"actualFile,omitempty"`
-	ErrorMessage string `json:"error,omitempty"`
+	Index         int     `json:"index"`
+	Artist        string  `json:"artist"`
+	Title         string  `json:"title"`
+	Timestamp     string  `json:"timestamp,omitempty"`
+	RawString     string  `json:"rawString"`
+	Status        string  `json:"status"` // "pending", "completed", "failed"
+	ActualFile    string  `json:"actualFile,omitempty"`
+	Duration      float64 `json:"duration,omitempty"`
+	BandwidthHz   int     `json:"bandwidthHz,omitempty"`
+	QualityRating string  `json:"qualityRating,omitempty"`
+	GainOffsetDb  float64 `json:"gainOffsetDb,omitempty"`
+	SourceURL     string  `json:"sourceUrl,omitempty"`
+	ErrorMessage  string  `json:"error,omitempty"`
 }
 
 type MixManifest struct {

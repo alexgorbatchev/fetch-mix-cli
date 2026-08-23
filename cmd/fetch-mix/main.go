@@ -16,6 +16,7 @@ import (
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/downloader"
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/llm"
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/parser"
+	"github.com/alexgorbatchev/fetch-mix-cli/internal/progress"
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/scraper"
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/search"
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/types"
@@ -33,9 +34,11 @@ var (
 	skipVerify   bool
 	skipMetadata bool
 	interactive  bool
-	verbose      bool
-	llmProvider  string
-	llmModel     string
+	verbose        bool
+	llmProvider    string
+	llmModel       string
+	progressTarget string
+	progressSocket string
 )
 
 func main() {
@@ -96,6 +99,8 @@ parses tracklists deterministically, and downloads individual tracks using fetch
 	rootCmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Interactively choose set search result")
 	rootCmd.Flags().StringVarP(&llmProvider, "llm-provider", "p", "auto", "LLM provider name (auto, ollama, litellm, gemini, openai, anthropic, openrouter, deepseek, groq, custom)")
 	rootCmd.Flags().StringVarP(&llmModel, "llm-model", "m", "", "LLM model name override")
+	rootCmd.Flags().StringVar(&progressTarget, "progress-target", "", "Target URI/address for streaming JSON progress events (e.g. unix:///path/to.sock, tcp://127.0.0.1:9099, fd://3, stdout, stderr)")
+	rootCmd.Flags().StringVar(&progressSocket, "progress-socket", "", "Shorthand alias for --progress-target")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose log output")
 
 	youtubeCmd := &cobra.Command{
@@ -129,6 +134,8 @@ parses tracklists deterministically, and downloads individual tracks using fetch
 	youtubeCmd.Flags().BoolVar(&skipMetadata, "skip-metadata", false, "Skip metadata lookup and cover art tagging in fetch-track CLI")
 	youtubeCmd.Flags().StringVarP(&llmProvider, "llm-provider", "p", "auto", "LLM provider name (auto, ollama, litellm, gemini, openai, anthropic, openrouter, deepseek, groq, custom)")
 	youtubeCmd.Flags().StringVarP(&llmModel, "llm-model", "m", "", "LLM model name override")
+	youtubeCmd.Flags().StringVar(&progressTarget, "progress-target", "", "Target URI/address for streaming JSON progress events (e.g. unix:///path/to.sock, tcp://127.0.0.1:9099, fd://3, stdout, stderr)")
+	youtubeCmd.Flags().StringVar(&progressSocket, "progress-socket", "", "Shorthand alias for --progress-target")
 
 	aiCmd := &cobra.Command{
 		Use:          "ai",
@@ -219,6 +226,20 @@ parses tracklists deterministically, and downloads individual tracks using fetch
 	}
 }
 
+func resolveProgressReporter(ctx context.Context) (*progress.Reporter, error) {
+	targetURI := progressTarget
+	if targetURI == "" {
+		targetURI = progressSocket
+	}
+	if targetURI == "" {
+		targetURI = os.Getenv("FETCH_MIX_PROGRESS_TARGET")
+	}
+	if strings.TrimSpace(targetURI) == "" {
+		return nil, nil
+	}
+	return progress.NewReporter(ctx, targetURI)
+}
+
 func runMixPipeline(ctx context.Context, query string) error {
 	var chosenSet types.SearchResult
 
@@ -303,16 +324,25 @@ func runMixPipeline(ctx context.Context, query string) error {
 		}
 	}
 
+	reporter, err := resolveProgressReporter(ctx)
+	if err != nil {
+		return fmt.Errorf("initializing progress reporter: %w", err)
+	}
+	if reporter != nil {
+		defer reporter.Close()
+	}
+
 	opts := downloader.DownloadOptions{
-		MixTitle:     chosenSet.Title,
-		Tracks:       tracks,
-		SkippedItems: skippedItems,
-		OutputDir:    outDir,
-		DryRun:       dryRun,
-		Sources:      sourcesFlag,
-		SkipVerify:   skipVerify,
-		SkipMetadata: skipMetadata,
-		Verbose:      verbose,
+		MixTitle:         chosenSet.Title,
+		Tracks:           tracks,
+		SkippedItems:     skippedItems,
+		OutputDir:        outDir,
+		DryRun:           dryRun,
+		Sources:          sourcesFlag,
+		SkipVerify:       skipVerify,
+		SkipMetadata:     skipMetadata,
+		Verbose:          verbose,
+		ProgressReporter: reporter,
 	}
 
 	return downloader.DownloadSet(ctx, opts)
@@ -339,16 +369,25 @@ func runYouTubePipeline(ctx context.Context, videoURL string) error {
 		}
 	}
 
+	reporter, err := resolveProgressReporter(ctx)
+	if err != nil {
+		return fmt.Errorf("initializing progress reporter: %w", err)
+	}
+	if reporter != nil {
+		defer reporter.Close()
+	}
+
 	opts := downloader.DownloadOptions{
-		MixTitle:     videoTitle,
-		Tracks:       tracks,
-		SkippedItems: skippedItems,
-		OutputDir:    outDir,
-		DryRun:       dryRun,
-		Sources:      sourcesFlag,
-		SkipVerify:   skipVerify,
-		SkipMetadata: skipMetadata,
-		Verbose:      verbose,
+		MixTitle:         videoTitle,
+		Tracks:           tracks,
+		SkippedItems:     skippedItems,
+		OutputDir:        outDir,
+		DryRun:           dryRun,
+		Sources:          sourcesFlag,
+		SkipVerify:       skipVerify,
+		SkipMetadata:     skipMetadata,
+		Verbose:          verbose,
+		ProgressReporter: reporter,
 	}
 
 	return downloader.DownloadSet(ctx, opts)

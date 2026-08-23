@@ -1,6 +1,7 @@
 package downloader
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math/rand"
@@ -12,20 +13,22 @@ import (
 
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/cmdutil"
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/deps"
+	"github.com/alexgorbatchev/fetch-mix-cli/internal/progress"
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/types"
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/ui"
 )
 
 type DownloadOptions struct {
-	MixTitle     string
-	Tracks       []types.Track
-	SkippedItems []types.SkippedItem
-	OutputDir    string
-	DryRun       bool
-	Sources      string
-	SkipVerify   bool
-	SkipMetadata bool
-	Verbose      bool
+	MixTitle         string
+	Tracks           []types.Track
+	SkippedItems     []types.SkippedItem
+	OutputDir        string
+	DryRun           bool
+	Sources          string
+	SkipVerify       bool
+	SkipMetadata     bool
+	Verbose          bool
+	ProgressReporter *progress.Reporter
 }
 
 var rxInvalidChars = regexp.MustCompile(`[/\\?%*:|"<>]+`)
@@ -105,6 +108,18 @@ func HasHourTimestamps(tracks []types.Track, skipped []types.SkippedItem) bool {
 	}
 
 	return false
+}
+
+func formatDuration(sec float64) string {
+	s := int(sec)
+	m := s / 60
+	s = s % 60
+	h := m / 60
+	m = m % 60
+	if h > 0 {
+		return fmt.Sprintf("%d:%02d:%02d", h, m, s)
+	}
+	return fmt.Sprintf("%d:%02d", m, s)
 }
 
 // GenerateM3UPlaylist creates an M3U playlist file named playlist.m3u preserving the set track order based on actual downloaded files in targetDir.
@@ -244,6 +259,7 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 
 	successCount := 0
 	failureCount := 0
+	isAgent := deps.IsAgentMode()
 
 	for i, track := range opts.Tracks {
 		select {
@@ -254,7 +270,7 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 
 		trackNum := i + 1
 
-		if !deps.IsAgentMode() {
+		if !isAgent {
 			fmt.Println(sep)
 		}
 
@@ -287,45 +303,128 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 		// Take pre-download snapshot of targetDir files
 		preSnapshot := SnapshotFiles(targetDir)
 
-		args := []string{
+		baseArgs := []string{
 			searchTarget,
 			"--out-dir", targetDir,
 		}
 
 		if opts.Sources != "" {
-			args = append(args, "--sources", opts.Sources)
+			baseArgs = append(baseArgs, "--sources", opts.Sources)
 		}
 		if opts.SkipVerify {
-			args = append(args, "--skip-verify")
+			baseArgs = append(baseArgs, "--skip-verify")
 		}
 		if opts.SkipMetadata {
-			args = append(args, "--skip-metadata")
+			baseArgs = append(baseArgs, "--skip-metadata")
 		}
 		if opts.Verbose {
-			args = append(args, "--verbose")
+			baseArgs = append(baseArgs, "--verbose")
 		}
 
-		cmd := cmdutil.NewCommand(ctx, "fetch-track", args...)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
+		var lastCandidate *progress.CandidateInfo
+		var lastResult *progress.ResultInfo
+		var lastError string
 
-		if err := cmd.Run(); err != nil {
+		var cmdErr error
+		var stdoutBuf, stderrBuf bytes.Buffer
+
+		if isAgent {
+			// Agent mode: preserve standard machine-readable output format
+			cmd := cmdutil.NewCommand(ctx, "fetch-track", baseArgs...)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmdErr = cmd.Run()
+		} else {
+			// Interactive / non-agent mode (agent=0): stream progress over socket server
+			sockServer, sockTarget, sockErr := progress.StartSocketServer(ctx, func(ev progress.Event) {
+				switch ev.Type {
+				case progress.EventPhaseStart:
+					if !opts.Verbose {
+						switch ev.Phase {
+						case "search":
+							fmt.Printf("  • Searching sources: %s\n", opts.Sources)
+						case "download":
+							fmt.Println("  • Downloading audio stream & artwork...")
+						case "verify":
+							fmt.Println("  • Inspecting audio quality & spectrum...")
+						case "metadata":
+							fmt.Println("  • Enriching metadata & cover art...")
+						}
+					}
+				case progress.EventCandidateSelected:
+					lastCandidate = ev.Candidate
+					if !opts.Verbose && ev.Candidate != nil {
+						durStr := ""
+						if ev.Candidate.Duration > 0 {
+							durStr = fmt.Sprintf(" [%s %s]", ev.Candidate.Source, formatDuration(ev.Candidate.Duration))
+						}
+						fmt.Printf("  • Selected: %q%s\n", ev.Candidate.Title, durStr)
+					}
+				case progress.EventComplete:
+					lastResult = ev.Result
+				case progress.EventError:
+					lastError = ev.Error
+				}
+
+				if opts.ProgressReporter != nil {
+					_ = opts.ProgressReporter.Emit(ev)
+				}
+			})
+
+			args := append([]string{}, baseArgs...)
+			if sockErr == nil && sockServer != nil {
+				args = append(args, "--progress-target", sockTarget)
+			}
+
+			cmd := cmdutil.NewCommand(ctx, "fetch-track", args...)
+			if opts.Verbose || sockServer == nil {
+				cmd.Stdout = os.Stdout
+				cmd.Stderr = os.Stderr
+			} else {
+				cmd.Stdout = &stdoutBuf
+				cmd.Stderr = &stderrBuf
+			}
+
+			cmdErr = cmd.Run()
+
+			if sockServer != nil {
+				_ = sockServer.Close()
+			}
+		}
+
+		if cmdErr != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			fmt.Printf("  Failed to download track %q: %v\n", searchTarget, err)
+
+			errMsg := lastError
+			if errMsg == "" {
+				if stderrBuf.Len() > 0 {
+					errMsg = strings.TrimSpace(stderrBuf.String())
+				} else {
+					errMsg = cmdErr.Error()
+				}
+			}
+
+			fmt.Printf("  ✗ Failed to download track %q: %s\n", searchTarget, errMsg)
 			failureCount++
 
 			if manifest != nil && i < len(manifest.Tracks) {
 				manifest.Tracks[i].Status = "failed"
-				manifest.Tracks[i].ErrorMessage = err.Error()
+				manifest.Tracks[i].ErrorMessage = errMsg
 				_ = SaveManifest(manifest)
 			}
 		} else {
-			// Detect newly created file
-			newFile := DetectNewFile(targetDir, preSnapshot)
-			finalFilename := newFile
+			// Determine final downloaded file name
+			var newFile string
+			if lastResult != nil && lastResult.Path != "" {
+				newFile = filepath.Base(lastResult.Path)
+			}
+			if newFile == "" {
+				newFile = DetectNewFile(targetDir, preSnapshot)
+			}
 
+			finalFilename := newFile
 			if newFile != "" {
 				expectedPrefix := fmt.Sprintf("%02d - ", trackNum)
 				if !strings.HasPrefix(newFile, expectedPrefix) {
@@ -338,12 +437,38 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 				}
 			}
 
-			fmt.Printf("  Completed: %s - %s\n", track.Artist, track.Title)
+			if !isAgent {
+				if lastResult != nil && lastResult.BandwidthRating != "" {
+					gainStr := ""
+					if lastResult.SuggestedGainDb != 0 {
+						gainSign := ""
+						if lastResult.SuggestedGainDb > 0 {
+							gainSign = "+"
+						}
+						gainStr = fmt.Sprintf(" | Gain Offset: %s%.1f dB", gainSign, lastResult.SuggestedGainDb)
+					}
+					fmt.Printf("  • Quality: %s (%d kHz)%s\n", lastResult.BandwidthRating, lastResult.BandwidthHz/1000, gainStr)
+				}
+				if lastResult != nil && lastResult.Title != "" && lastResult.Album != "" {
+					fmt.Printf("  • Metadata: %q (%s, %s)\n", lastResult.Title, lastResult.Album, lastResult.ReleaseYear)
+				}
+				fmt.Printf("  ✓ Completed: %s\n", finalFilename)
+			}
+
 			successCount++
 
 			if manifest != nil && i < len(manifest.Tracks) {
 				manifest.Tracks[i].Status = "completed"
 				manifest.Tracks[i].ActualFile = finalFilename
+				if lastResult != nil {
+					manifest.Tracks[i].Duration = lastResult.Duration
+					manifest.Tracks[i].BandwidthHz = lastResult.BandwidthHz
+					manifest.Tracks[i].QualityRating = lastResult.BandwidthRating
+					manifest.Tracks[i].GainOffsetDb = lastResult.SuggestedGainDb
+				}
+				if lastCandidate != nil {
+					manifest.Tracks[i].SourceURL = lastCandidate.WebpageURL
+				}
 				_ = SaveManifest(manifest)
 			}
 		}

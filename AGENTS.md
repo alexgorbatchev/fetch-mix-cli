@@ -29,6 +29,7 @@ fetch-mix-cli/
     ├── deps/               # Verification of external dependencies (fetch-track, yt-dlp, ffmpeg, firecrawl)
     ├── downloader/         # Sequential download execution & .m3u playlist generation
     ├── parser/             # Deterministic markdown tracklist parser (MixesDB, Brizm, OpeningTrack)
+    ├── progress/           # Socket progress listener & NDJSON streaming telemetry
     ├── scraper/            # Firecrawl page scraping wrapper
     ├── search/             # MixesDB & general web tracklist search wrapper
     ├── types/              # Domain models (Track, SearchResult, ScrapedSet)
@@ -48,7 +49,7 @@ fetch-mix-cli/
 
 The following external binaries must be available in `$PATH`:
 
-1. **`fetch-track`** (min version `0.1.0`): Single-track downloader pipeline.
+1. **`fetch-track`** (min version `1.0.0`): Single-track downloader pipeline.
 2. **`yt-dlp`** (min version `2024.08.01`): Comment fetcher and YouTube video query engine.
 3. **`ffmpeg`** (min version `4.4`): Audio stream processor.
 4. **`firecrawl`** (min version `1.0.0`): Web scraper and search engine.
@@ -96,6 +97,8 @@ Prints supported LLM providers, default models, required environment variables, 
 | `--llm-model` | `-m` | | LLM model name override (e.g. `gpt-4o-mini`, `claude-3-5-haiku-latest`, `llama3.2`) |
 | `--sources` | `-s` | `youtube,soundcloud` | Comma-separated search sources passed to `fetch-track` |
 | `--interactive` | `-i` | `false` | Interactively choose set search result |
+| `--progress-target` | | `""` | Target URI for streaming NDJSON progress events (`unix:///path.sock`, `tcp://127.0.0.1:9099`, `fd://3`, `stdout`, `stderr`) |
+| `--progress-socket` | | `""` | Shorthand alias for `--progress-target` |
 | `--skip-verify` | | `false` | Skip audio quality spectrum check in `fetch-track` |
 | `--skip-metadata` | | `false` | Skip cover art and metadata tagging in `fetch-track` |
 | `--verbose` | `-v` | `false` | Enable verbose log output |
