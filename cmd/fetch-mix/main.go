@@ -22,6 +22,7 @@ import (
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/types"
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/ui"
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/youtube"
+	"github.com/alexgorbatchev/godeps"
 )
 
 var (
@@ -343,54 +344,9 @@ func resolveProgressReporter(ctx context.Context) (*progress.Reporter, error) {
 }
 
 func ensureDependencies(ctx context.Context) error {
-	_ = deps.InitManagedPath()
-	reports, err := deps.VerifyDependencies(ctx)
-	if err == nil {
-		return nil
-	}
-
-	var unsatisfied []string
-	for _, r := range reports {
-		if !r.Satisfied {
-			unsatisfied = append(unsatisfied, r.Summary())
-		}
-	}
-
-	if autoInstall {
-		fmt.Printf("Auto-installing missing/outdated dependencies: %s...\n", strings.Join(unsatisfied, ", "))
-		installed, installErr := deps.InstallMissingDependencies(ctx)
-		if installErr != nil {
-			return fmt.Errorf("auto-installing dependencies: %w", installErr)
-		}
-		if len(installed) > 0 {
-			fmt.Printf("✓ Successfully installed: %s\n", strings.Join(installed, ", "))
-		}
-		return nil
-	}
-
-	if !deps.IsAgentMode() {
-		reader := bufio.NewReader(os.Stdin)
-		fmt.Printf("\nMissing or outdated dependencies: %s\nWould you like to auto-install them to managed directory? [y/N]: ", strings.Join(unsatisfied, ", "))
-		ans, readErr := reader.ReadString('\n')
-		if readErr != nil && len(ans) == 0 {
-			// EOF or closed stdin without user input - do not auto-install
-			return err
-		}
-		ans = strings.TrimSpace(strings.ToLower(ans))
-		if ans == "y" || ans == "yes" {
-			fmt.Printf("Installing dependencies: %s...\n", strings.Join(unsatisfied, ", "))
-			installed, installErr := deps.InstallMissingDependencies(ctx)
-			if installErr != nil {
-				return fmt.Errorf("auto-installing dependencies: %w", installErr)
-			}
-			if len(installed) > 0 {
-				fmt.Printf("✓ Successfully installed: %s\n\n", strings.Join(installed, ", "))
-			}
-			return nil
-		}
-	}
-
-	return err
+	return deps.NewManager().Ensure(ctx, godeps.EnsureOptions{
+		AutoInstall: autoInstall,
+	})
 }
 
 func runMixPipeline(ctx context.Context, query string) error {

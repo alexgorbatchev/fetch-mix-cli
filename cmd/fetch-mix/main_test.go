@@ -394,9 +394,9 @@ func TestEnsureDependencies_Direct(t *testing.T) {
 	// 1. All satisfied
 	c, _ := cache.New()
 	if c != nil {
-		_ = c.Put("deps_fetch-track.json", "2.0.0")
-		_ = c.Put("deps_yt-dlp.json", "2025.01.01")
-		_ = c.Put("deps_ffmpeg.json", "ffmpeg version 6.0")
+		_ = c.Put("godeps_fetch-track.json", "2.0.0")
+		_ = c.Put("godeps_yt-dlp.json", "2025.01.01")
+		_ = c.Put("godeps_ffmpeg.json", "ffmpeg version 6.0")
 	}
 
 	if err := ensureDependencies(ctx); err != nil {
@@ -404,9 +404,9 @@ func TestEnsureDependencies_Direct(t *testing.T) {
 	}
 
 	// 2. Missing/outdated dependencies in agent mode
-	_ = c.Put("deps_fetch-track.json", "0.1.0")
-	_ = c.Put("deps_yt-dlp.json", "2025.01.01")
-	_ = c.Put("deps_ffmpeg.json", "ffmpeg version 6.0")
+	_ = c.Put("godeps_fetch-track.json", "0.1.0")
+	_ = c.Put("godeps_yt-dlp.json", "2025.01.01")
+	_ = c.Put("godeps_ffmpeg.json", "ffmpeg version 6.0")
 
 	t.Setenv("AGENT", "1")
 	if err := ensureDependencies(ctx); err == nil {
@@ -465,8 +465,8 @@ func TestEnsureDependencies_FormattedOutput(t *testing.T) {
 
 	c, _ := cache.New()
 	if c != nil {
-		_ = c.Put("deps_fetch-track.json", "1.0.0") // Outdated (min 1.4.0)
-		_ = c.Put("deps_ffmpeg.json", "ffmpeg version 6.0")
+		_ = c.Put("godeps_fetch-track.json", "1.0.0") // Outdated (min 1.4.0)
+		_ = c.Put("godeps_ffmpeg.json", "ffmpeg version 6.0")
 	}
 
 	canceledCtx, cancel := context.WithCancel(context.Background())
@@ -512,8 +512,8 @@ func TestCLI_Dependencies_Failures(t *testing.T) {
 
 	c, _ := cache.New()
 	if c != nil {
-		_ = c.Put("deps_fetch-track.json", "0.1.0") // Outdated
-		_ = c.Delete("deps_yt-dlp.json")            // Missing / error
+		_ = c.Put("godeps_fetch-track.json", "0.1.0") // Outdated
+		_ = c.Delete("godeps_yt-dlp.json")            // Missing / error
 	}
 
 	ctx := context.Background()
