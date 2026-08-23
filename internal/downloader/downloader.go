@@ -369,12 +369,19 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 	fmt.Println(sep)
 	fmt.Println("Download Process Finished!")
 	fmt.Printf("  Downloaded: %d tracks\n", successCount)
-	if failureCount > 0 {
-		fmt.Printf("  Failed: %d tracks\n", failureCount)
-	}
-	fmt.Printf("Target Directory: %s\n", targetDir)
-	if generatedPlaylist != "" {
-		fmt.Printf("Playlist File   : %s\n", generatedPlaylist)
+	fmt.Printf("  Failed: %d tracks\n", failureCount)
+
+	if failureCount > 0 && manifest != nil {
+		fmt.Printf("\nFailed Tracks (%d):\n", failureCount)
+		for _, entry := range manifest.Tracks {
+			if entry.Status == "failed" {
+				errMsg := ""
+				if entry.ErrorMessage != "" {
+					errMsg = fmt.Sprintf(" (%s)", entry.ErrorMessage)
+				}
+				fmt.Printf("  - [%02d/%02d] %s - %s%s\n", entry.Index, totalTracks, entry.Artist, entry.Title, errMsg)
+			}
+		}
 	}
 	fmt.Println(sep)
 
