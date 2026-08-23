@@ -41,8 +41,6 @@ func TestParseVersionOutput(t *testing.T) {
 		{"fetch-track", "1.3.0\n", "1.3.0"},
 		{"fetch-track", "fetch-track version 1.0.0\n", "1.0.0"},
 		{"fetch-track", "v1.2.3\n", "1.2.3"},
-		{"firecrawl", "1.0.0", "1.0.0"},
-		{"firecrawl", "firecrawl version 1.0.0", "1.0.0"},
 	}
 
 	for _, tt := range tests {

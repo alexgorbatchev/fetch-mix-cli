@@ -43,11 +43,6 @@ var RequiredDependencies = []Dependency{
 		MinVersion: "4.4",
 		InstallURL: "https://ffmpeg.org/download.html",
 	},
-	{
-		Name:       "firecrawl",
-		MinVersion: "1.0.0",
-		InstallURL: "https://github.com/alexgorbatchev/firecrawl-cli",
-	},
 }
 
 type CommandRunner func(ctx context.Context, name string, args ...string) ([]byte, error)
@@ -130,7 +125,7 @@ func VerifyDependenciesWithRunner(ctx context.Context, runner CommandRunner, c *
 				out = []byte(cachedStr)
 			} else {
 				var versionArgs []string
-				if dep.Name == "yt-dlp" || dep.Name == "fetch-track" || dep.Name == "firecrawl" {
+				if dep.Name == "yt-dlp" || dep.Name == "fetch-track" {
 					versionArgs = []string{"--version"}
 				} else {
 					versionArgs = []string{"-version"}
@@ -220,7 +215,7 @@ func ParseVersionOutput(depName, output string) string {
 		if len(match) > 1 {
 			return match[1]
 		}
-	case "fetch-track", "firecrawl":
+	case "fetch-track":
 		line = strings.TrimPrefix(line, depName)
 		line = strings.TrimSpace(line)
 		line = strings.TrimPrefix(line, "version")

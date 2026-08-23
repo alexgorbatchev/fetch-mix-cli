@@ -403,8 +403,6 @@ func InstallDependency(ctx context.Context, depName string) error {
 	switch depName {
 	case "fetch-track":
 		return DownloadAndExtractGoBinary(ctx, "alexgorbatchev", "fetch-track-cli", "fetch-track", binDir)
-	case "firecrawl":
-		return DownloadAndExtractGoBinary(ctx, "alexgorbatchev", "firecrawl-cli", "firecrawl", binDir)
 	case "yt-dlp":
 		return InstallYtDlp(ctx, binDir)
 	case "ffmpeg", "ffprobe":
@@ -430,8 +428,6 @@ func UpdateDependency(ctx context.Context, depName string) error {
 	switch depName {
 	case "fetch-track":
 		return DownloadAndExtractGoBinary(ctx, "alexgorbatchev", "fetch-track-cli", "fetch-track", binDir)
-	case "firecrawl":
-		return DownloadAndExtractGoBinary(ctx, "alexgorbatchev", "firecrawl-cli", "firecrawl", binDir)
 	case "yt-dlp":
 		return UpdateYtDlp(ctx, DefaultRunner, binDir)
 	case "ffmpeg", "ffprobe":

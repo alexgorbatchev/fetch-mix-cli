@@ -1,118 +1,154 @@
 package search
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
+	"html"
+	"net/http"
+	"net/url"
 	"strings"
+	"time"
 
-	"github.com/alexgorbatchev/fetch-mix-cli/internal/cmdutil"
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/types"
 )
 
-type firecrawlSearchOutput struct {
-	Web []types.SearchResult `json:"web"`
+const (
+	defaultUserAgent   = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+	defaultHTTPTimeout = 15 * time.Second
+)
+
+var (
+	mixesDBBaseURL   = "https://www.mixesdb.com"
+	openingTrackAPI  = "https://www.openingtrack.com/wp-json/wp/v2/posts"
+	tracklistClubAPI = "https://tracklist.club/wp-json/wp/v2/posts"
+)
+
+type mixesDBSearchResponse struct {
+	Query struct {
+		Search []struct {
+			PageID  int    `json:"pageid"`
+			Title   string `json:"title"`
+			Snippet string `json:"snippet"`
+		} `json:"search"`
+	} `json:"query"`
+}
+
+type wpPost struct {
+	ID    int    `json:"id"`
+	Link  string `json:"link"`
+	Title struct {
+		Rendered string `json:"rendered"`
+	} `json:"title"`
 }
 
 // IsCrawlableURL checks if a URL is from a known crawlable tracklist site.
 func IsCrawlableURL(urlStr string) bool {
-	url := strings.ToLower(urlStr)
-	isMixesDb := strings.Contains(url, "mixesdb.com/w/") &&
-		!strings.Contains(url, "category:") &&
-		!strings.Contains(url, "special:") &&
-		!strings.Contains(url, "talk:") &&
-		!strings.Contains(url, "user:")
+	u := strings.ToLower(urlStr)
+	isMixesDb := strings.Contains(u, "mixesdb.com/w/") &&
+		!strings.Contains(u, "category:") &&
+		!strings.Contains(u, "special:") &&
+		!strings.Contains(u, "talk:") &&
+		!strings.Contains(u, "user:")
 
 	return isMixesDb ||
-		strings.Contains(url, "openingtrack.com/") ||
-		strings.Contains(url, "brizm.dev/") ||
-		strings.Contains(url, "thomaslaupstad.com/") ||
-		strings.Contains(url, "tracklist.club/")
+		strings.Contains(u, "openingtrack.com/") ||
+		strings.Contains(u, "thomaslaupstad.com/") ||
+		strings.Contains(u, "tracklist.club/")
 }
 
-func searchMixesDb(ctx context.Context, query string) ([]types.SearchResult, error) {
-	searchQuery := query + " mixesdb"
-	cmd := cmdutil.NewCommand(ctx, "firecrawl", "search", searchQuery, "--json")
-	cmd.Env = os.Environ()
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+// SearchMixesDB searches MixesDB via MediaWiki API.
+func SearchMixesDB(ctx context.Context, query string) ([]types.SearchResult, error) {
+	reqURL := fmt.Sprintf("%s/w/api.php?action=query&list=search&srsearch=%s&format=json",
+		mixesDBBaseURL, url.QueryEscape(query))
 
-	if err := cmd.Run(); err != nil {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		return nil, fmt.Errorf("firecrawl search failed: %w: %s", err, stderr.String())
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating MixesDB search request: %w", err)
+	}
+	req.Header.Set("User-Agent", defaultUserAgent)
+
+	client := &http.Client{Timeout: defaultHTTPTimeout}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("MixesDB search HTTP request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("MixesDB search returned status %d", resp.StatusCode)
 	}
 
-	outBytes := bytes.TrimSpace(stdout.Bytes())
-	if len(outBytes) == 0 {
-		outBytes = bytes.TrimSpace(stderr.Bytes())
-	}
-	if len(outBytes) == 0 {
-		return nil, nil
+	var parsed mixesDBSearchResponse
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return nil, fmt.Errorf("parsing MixesDB search response: %w", err)
 	}
 
-	var parsed firecrawlSearchOutput
-	if err := json.Unmarshal(outBytes, &parsed); err != nil {
-		return nil, nil
+	var results []types.SearchResult
+	for _, item := range parsed.Query.Search {
+		title := item.Title
+		pageSlug := strings.ReplaceAll(title, " ", "_")
+		pageURL := fmt.Sprintf("%s/w/%s", mixesDBBaseURL, url.PathEscape(pageSlug))
+		results = append(results, types.SearchResult{
+			Title: title,
+			URL:   pageURL,
+		})
 	}
 
-	var filtered []types.SearchResult
-	for _, res := range parsed.Web {
-		u := strings.ToLower(res.URL)
-		if strings.Contains(u, "mixesdb.com/w/") &&
-			!strings.Contains(u, "category:") &&
-			!strings.Contains(u, "special:") &&
-			!strings.Contains(u, "talk:") &&
-			!strings.Contains(u, "user:") {
-			filtered = append(filtered, res)
-		}
-	}
-
-	return filtered, nil
+	return results, nil
 }
 
-func searchGeneral(ctx context.Context, query string) ([]types.SearchResult, error) {
-	cmd := cmdutil.NewCommand(ctx, "firecrawl", "search", query, "--json")
-	cmd.Env = os.Environ()
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+func searchWordPressEndpoint(ctx context.Context, client *http.Client, endpoint, query string) ([]types.SearchResult, error) {
+	reqURL := fmt.Sprintf("%s?search=%s&per_page=5", endpoint, url.QueryEscape(query))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", defaultUserAgent)
 
-	if err := cmd.Run(); err != nil {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		return nil, fmt.Errorf("firecrawl search failed: %w: %s", err, stderr.String())
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("endpoint %s returned status %d", endpoint, resp.StatusCode)
 	}
 
-	outBytes := bytes.TrimSpace(stdout.Bytes())
-	if len(outBytes) == 0 {
-		outBytes = bytes.TrimSpace(stderr.Bytes())
-	}
-	if len(outBytes) == 0 {
-		return nil, nil
+	var posts []wpPost
+	if err := json.NewDecoder(resp.Body).Decode(&posts); err != nil {
+		return nil, err
 	}
 
-	var parsed firecrawlSearchOutput
-	if err := json.Unmarshal(outBytes, &parsed); err != nil {
-		return nil, nil
+	var results []types.SearchResult
+	for _, p := range posts {
+		title := html.UnescapeString(p.Title.Rendered)
+		results = append(results, types.SearchResult{
+			Title: title,
+			URL:   p.Link,
+		})
 	}
-
-	var filtered []types.SearchResult
-	for _, res := range parsed.Web {
-		if IsCrawlableURL(res.URL) {
-			filtered = append(filtered, res)
-		}
-	}
-
-	return filtered, nil
+	return results, nil
 }
 
-// SearchSet searches for a DJ set's tracklist across MixesDB and general crawlable web mirrors.
+// SearchMirrors searches supported WordPress-based tracklist mirrors.
+func SearchMirrors(ctx context.Context, query string) ([]types.SearchResult, error) {
+	client := &http.Client{Timeout: defaultHTTPTimeout}
+	var allResults []types.SearchResult
+
+	if otResults, err := searchWordPressEndpoint(ctx, client, openingTrackAPI, query); err == nil {
+		allResults = append(allResults, otResults...)
+	}
+
+	if tcResults, err := searchWordPressEndpoint(ctx, client, tracklistClubAPI, query); err == nil {
+		allResults = append(allResults, tcResults...)
+	}
+
+	return allResults, nil
+}
+
+// SearchSet searches for a DJ set's tracklist across MixesDB and crawlable mirrors.
 func SearchSet(ctx context.Context, query string) ([]types.SearchResult, error) {
 	finalQuery := query
 
@@ -135,11 +171,16 @@ func SearchSet(ctx context.Context, query string) ([]types.SearchResult, error) 
 	}
 
 	// 1. Search MixesDB first
-	mixesResults, err := searchMixesDb(ctx, finalQuery)
+	mixesResults, err := SearchMixesDB(ctx, finalQuery)
 	if err == nil && len(mixesResults) > 0 {
 		return mixesResults, nil
 	}
 
-	// 2. Fall back to general web search
-	return searchGeneral(ctx, finalQuery)
+	// 2. Fall back to mirror search
+	mirrorResults, err := SearchMirrors(ctx, finalQuery)
+	if err == nil && len(mirrorResults) > 0 {
+		return mirrorResults, nil
+	}
+
+	return nil, nil
 }
