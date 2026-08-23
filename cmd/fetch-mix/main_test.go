@@ -403,10 +403,10 @@ func TestEnsureDependencies_Direct(t *testing.T) {
 		t.Fatalf("ensureDependencies failed when satisfied: %v", err)
 	}
 
-	// 2. Missing dependencies in agent mode
-	_ = c.Delete("deps_fetch-track.json")
-	_ = c.Delete("deps_yt-dlp.json")
-	_ = c.Delete("deps_ffmpeg.json")
+	// 2. Missing/outdated dependencies in agent mode
+	_ = c.Put("deps_fetch-track.json", "0.1.0")
+	_ = c.Put("deps_yt-dlp.json", "2025.01.01")
+	_ = c.Put("deps_ffmpeg.json", "ffmpeg version 6.0")
 
 	t.Setenv("AGENT", "1")
 	if err := ensureDependencies(ctx); err == nil {

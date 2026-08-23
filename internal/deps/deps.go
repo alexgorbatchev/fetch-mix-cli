@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/cache"
+	"github.com/alexgorbatchev/fetch-mix-cli/internal/cmdutil"
 )
 
 // IsAgentMode checks if AGENT=1 or AGENT=true environment variable is set.
@@ -55,7 +56,10 @@ func DefaultRunner(ctx context.Context, name string, args ...string) ([]byte, er
 	err := cmd.Run()
 	if err != nil {
 		if stderr.Len() > 0 {
-			return nil, fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
+			cleanErr := cmdutil.SanitizeStderr(stderr.String())
+			if cleanErr != "" {
+				return nil, fmt.Errorf("%w: %s", err, cleanErr)
+			}
 		}
 		return nil, err
 	}

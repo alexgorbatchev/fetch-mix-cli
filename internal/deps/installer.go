@@ -338,13 +338,28 @@ func InstallYtDlp(ctx context.Context, targetDir string) error {
 }
 
 func installYtDlpForOS(ctx context.Context, goos, targetDir string) error {
+	return installYtDlpForPlatform(ctx, goos, runtime.GOARCH, targetDir)
+}
+
+func installYtDlpForPlatform(ctx context.Context, goos, goarch, targetDir string) error {
 	binName := "yt-dlp"
-	downloadURL := fmt.Sprintf("%s/yt-dlp/yt-dlp/releases/latest/download/yt-dlp", strings.TrimRight(githubBaseURL, "/"))
-	if goos == "windows" {
+	assetName := "yt-dlp"
+
+	switch goos {
+	case "darwin":
+		assetName = "yt-dlp_macos"
+	case "windows":
 		binName = "yt-dlp.exe"
-		downloadURL = fmt.Sprintf("%s/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe", strings.TrimRight(githubBaseURL, "/"))
+		assetName = "yt-dlp.exe"
+	case "linux":
+		if goarch == "arm64" {
+			assetName = "yt-dlp_linux_aarch64"
+		} else {
+			assetName = "yt-dlp_linux"
+		}
 	}
 
+	downloadURL := fmt.Sprintf("%s/yt-dlp/yt-dlp/releases/latest/download/%s", strings.TrimRight(githubBaseURL, "/"), assetName)
 	return downloadDirectBinary(ctx, downloadURL, binName, targetDir)
 }
 

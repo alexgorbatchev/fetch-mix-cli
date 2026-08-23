@@ -425,6 +425,46 @@ func TestResolveLatestTag_MoreErrors(t *testing.T) {
 	}
 }
 
+func TestInstallYtDlpForPlatform(t *testing.T) {
+	ctx := context.Background()
+	tempDir := t.TempDir()
+
+	var requestedPaths []string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestedPaths = append(requestedPaths, r.URL.Path)
+		w.Write([]byte("#!/bin/sh\n"))
+	}))
+	defer ts.Close()
+
+	oldBase := githubBaseURL
+	githubBaseURL = ts.URL
+	defer func() { githubBaseURL = oldBase }()
+
+	tests := []struct {
+		goos     string
+		goarch   string
+		wantPath string
+	}{
+		{"darwin", "arm64", "/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos"},
+		{"darwin", "amd64", "/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos"},
+		{"windows", "amd64", "/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"},
+		{"linux", "arm64", "/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux_aarch64"},
+		{"linux", "amd64", "/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux"},
+		{"freebsd", "amd64", "/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"},
+	}
+
+	for _, tt := range tests {
+		requestedPaths = nil
+		err := installYtDlpForPlatform(ctx, tt.goos, tt.goarch, tempDir)
+		if err != nil {
+			t.Fatalf("installYtDlpForPlatform(%s, %s) error: %v", tt.goos, tt.goarch, err)
+		}
+		if len(requestedPaths) == 0 || requestedPaths[len(requestedPaths)-1] != tt.wantPath {
+			t.Errorf("installYtDlpForPlatform(%s, %s) requested %v, want %s", tt.goos, tt.goarch, requestedPaths, tt.wantPath)
+		}
+	}
+}
+
 func TestUpdateYtDlp(t *testing.T) {
 	ctx := context.Background()
 	tempDir := t.TempDir()

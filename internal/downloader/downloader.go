@@ -403,7 +403,7 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 			errMsg := lastError
 			if errMsg == "" {
 				if stderrBuf.Len() > 0 {
-					errMsg = strings.TrimSpace(stderrBuf.String())
+					errMsg = cmdutil.SanitizeStderr(stderrBuf.String())
 				} else {
 					errMsg = cmdErr.Error()
 				}

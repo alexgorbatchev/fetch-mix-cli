@@ -152,7 +152,11 @@ func FetchVideoComments(ctx context.Context, videoURL string, noCache bool) (*yo
 		if ctx.Err() != nil {
 			return nil, false, ctx.Err()
 		}
-		return nil, false, fmt.Errorf("yt-dlp comment extraction failed: %w: %s", err, strings.TrimSpace(stderr.String()))
+		cleanStderr := cmdutil.SanitizeStderr(stderr.String())
+		if cleanStderr != "" {
+			return nil, false, fmt.Errorf("yt-dlp comment extraction failed: %s", cleanStderr)
+		}
+		return nil, false, fmt.Errorf("yt-dlp comment extraction failed: %w", err)
 	}
 
 	var info youtubeVideoInfo
