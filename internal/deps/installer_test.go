@@ -1,7 +1,6 @@
 package deps
 
 import (
-	"context"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -51,9 +50,4 @@ func TestInitManagedPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InitManagedPath() error = %v", err)
 	}
-}
-
-func TestUpgradeSelf_DevVersion(t *testing.T) {
-	ctx := context.Background()
-	_, _, _ = UpgradeSelf(ctx, "dev")
 }

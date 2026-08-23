@@ -308,15 +308,15 @@ parses tracklists deterministically, and downloads individual tracks using fetch
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Printf("Checking for newer fetch-mix release (current version: %s)...\n", version)
-			updated, latestVer, err := deps.UpgradeSelf(cmd.Context(), version)
+			newVer, err := godeps.UpgradeSelf(cmd.Context(), "alexgorbatchev", "fetch-mix-cli", version)
 			if err != nil {
+				if strings.Contains(err.Error(), "already at the latest version") {
+					fmt.Printf("fetch-mix is already up to date (%s).\n", version)
+					return nil
+				}
 				return fmt.Errorf("upgrade failed: %w", err)
 			}
-			if !updated {
-				fmt.Printf("fetch-mix is already up to date (version %s).\n", latestVer)
-				return nil
-			}
-			fmt.Printf("✓ Successfully upgraded fetch-mix to version %s!\n", latestVer)
+			fmt.Printf("✓ Successfully upgraded fetch-mix to version %s!\n", newVer)
 			return nil
 		},
 	}
