@@ -3,6 +3,7 @@ package downloader
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -162,45 +163,72 @@ func TestDownloadSet_ExecutionAndResume(t *testing.T) {
 	tempDir := t.TempDir()
 	outDir := filepath.Join(tempDir, "downloads")
 
-	// Create mock fetch-track script that also sends progress events if --progress-target is provided
-	mockScript := filepath.Join(tempDir, "mock_fetch_track.sh")
-	scriptContent := `#!/bin/sh
-out=""
-track=""
-progress=""
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --out-dir) out="$2"; shift 2 ;;
-    --progress-target) progress="$2"; shift 2 ;;
-    *) if [ -z "$track" ]; then track="$1"; fi; shift ;;
-  esac
-done
+	// Create mock fetch-track Go program
+	mockGoCode := `package main
 
-if [ "$track" = "fail" ]; then
-  echo "Download failed error" >&2
-  exit 1
-fi
+import (
+	"fmt"
+	"net"
+	"os"
+	"path/filepath"
+	"strings"
+)
 
-mkdir -p "$out"
-echo "audio data" > "$out/Unprefixed Artist - Track 1.m4a"
+func main() {
+	var out, track, progTarget string
+	args := os.Args[1:]
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--out-dir":
+			if i+1 < len(args) { out = args[i+1]; i++ }
+		case "--progress-target":
+			if i+1 < len(args) { progTarget = args[i+1]; i++ }
+		default:
+			if track == "" && !strings.HasPrefix(args[i], "--") {
+				track = args[i]
+			}
+		}
+	}
 
-# If progress target is unix socket, send events
-case "$progress" in
-  unix://*)
-    sock="${progress#unix://}"
-    if [ -S "$sock" ]; then
-      printf '{"type":"phase_start","phase":"search"}\n{"type":"phase_start","phase":"download"}\n{"type":"phase_start","phase":"verify"}\n{"type":"phase_start","phase":"metadata"}\n{"type":"candidate_selected","candidate":{"title":"Test Video","source":"youtube","duration":200}}\n{"type":"complete","result":{"path":"Unprefixed Artist - Track 1.m4a","title":"Track 1","album":"Album 1","releaseYear":"2024","bandwidthRating":"High","bandwidthHz":20000,"suggestedGainDb":1.5}}\n' | nc -U "$sock" 2>/dev/null || true
-    fi
-    ;;
-esac
+	if track == "fail" {
+		fmt.Fprintln(os.Stderr, "Download failed error")
+		os.Exit(1)
+	}
+
+	if out != "" {
+		_ = os.MkdirAll(out, 0755)
+		_ = os.WriteFile(filepath.Join(out, "Unprefixed Artist - Track 1.m4a"), []byte("audio"), 0644)
+	}
+
+	if progTarget != "" && strings.HasPrefix(progTarget, "unix://") {
+		addr := strings.TrimPrefix(progTarget, "unix://")
+		conn, err := net.Dial("unix", addr)
+		if err == nil && conn != nil {
+			_, _ = fmt.Fprintln(conn, "{\"type\":\"phase_start\",\"phase\":\"search\"}")
+			_, _ = fmt.Fprintln(conn, "{\"type\":\"phase_start\",\"phase\":\"download\"}")
+			_, _ = fmt.Fprintln(conn, "{\"type\":\"phase_start\",\"phase\":\"verify\"}")
+			_, _ = fmt.Fprintln(conn, "{\"type\":\"phase_start\",\"phase\":\"metadata\"}")
+			_, _ = fmt.Fprintln(conn, "{\"type\":\"candidate_selected\",\"candidate\":{\"title\":\"Test Video\",\"duration\":200,\"source\":\"youtube\"}}")
+			_, _ = fmt.Fprintln(conn, "{\"type\":\"complete\",\"result\":{\"path\":\"Unprefixed Artist - Track 1.m4a\",\"title\":\"Track 1\",\"album\":\"Album 1\",\"releaseYear\":\"2024\",\"bandwidthRating\":\"High\",\"bandwidthHz\":20000,\"suggestedGainDb\":1.5}}")
+			_ = conn.Close()
+		}
+	}
+}
 `
-	if err := os.WriteFile(mockScript, []byte(scriptContent), 0755); err != nil {
+	mockSrc := filepath.Join(tempDir, "mock_main.go")
+	if err := os.WriteFile(mockSrc, []byte(mockGoCode), 0644); err != nil {
 		t.Fatal(err)
+	}
+
+	mockBin := filepath.Join(tempDir, "mock_fetch_track")
+	buildCmd := exec.Command("go", "build", "-o", mockBin, mockSrc)
+	if out, err := buildCmd.CombinedOutput(); err != nil {
+		t.Fatalf("building mock binary failed: %v, output: %s", err, string(out))
 	}
 
 	oldCmd := fetchTrackCmdName
 	oldDelay := trackDownloadDelay
-	fetchTrackCmdName = mockScript
+	fetchTrackCmdName = mockBin
 	trackDownloadDelay = 0
 	defer func() {
 		fetchTrackCmdName = oldCmd
