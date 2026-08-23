@@ -12,7 +12,7 @@
 
 ## What It Does
 
-- **Finds Full DJ Mix Tracklists**: Searches [MixesDB](https://www.mixesdb.com) and crawlable tracklist web mirrors (OpeningTrack, Brizm, Thomas Laupstad, Tracklist.club) for complete DJ set tracklists.
+- **Finds Full DJ Mix Tracklists**: Searches [MixesDB](https://www.mixesdb.com) and crawlable tracklist web mirrors (OpeningTrack, Tracklist.club, Thomas Laupstad) for complete DJ set tracklists.
 - **Extracts Tracklists from YouTube Comments**: Retrieves video comments via `yt-dlp` and uses multi-provider LLMs (Ollama, LiteLLM, Google Gemini, OpenAI, Anthropic Claude, OpenRouter, DeepSeek, Groq, custom endpoints via `goai`) to extract and clean full set tracklists.
 - **1001Tracklists URL Intelligence**: Resolves `1001tracklists.com` URLs automatically by extracting set slugs and discovering unblocked web mirrors.
 - **Generates Order-Preserving M3U Playlists**: Creates a `playlist.m3u` file inside the mix output folder keeping the exact chronological track order of the set.
@@ -22,7 +22,7 @@
 ## How It Works
 
 1. **Search**: Searches MixesDB, web mirrors, or YouTube comments for requested DJ set or video URL.
-2. **Extract**: Parses tracklists deterministically or extracts valid artist/track pairs using Gemini 2.5 Flash API.
+2. **Extract**: Extracts structured tracklists via multi-provider LLMs (Ollama, LiteLLM, Gemini, OpenAI, Anthropic Claude, etc.) with automatic deterministic regex fallback.
 3. **Plan**: Organizes tracks sequentially and previews filenames and target directories in `--dry-run` mode.
 4. **Download**: Calls `fetch-track` CLI sequentially for each track in the mix.
 5. **Playlist & Manifest**: Updates `mix_manifest.json` with actual saved file paths and builds `playlist.m3u`.
@@ -31,22 +31,24 @@
 
 ### 1. DJ Set Tracklist Search & Web Scraping
 
-- **Direct Tracklist URLs**: If given a direct link to a supported tracklist site (MixesDB, Brizm, OpeningTrack), `fetch-mix` skips search and immediately scrapes the target page.
+- **Direct Tracklist URLs**: If given a direct link to a supported tracklist site (MixesDB, OpeningTrack, Tracklist.club, Thomas Laupstad), `fetch-mix` skips search and immediately scrapes the target page.
 - **1001Tracklists URLs**: `fetch-mix` detects 1001tracklists links, extracts the set title slug from the URL path (for example, turning `polo-and-pan-cercle-2018.html` into `"polo and pan cercle 2018"`), and searches the web for unblocked mirror pages.
-- **Hierarchical Web Search**: `fetch-mix` first queries MixesDB via web search. If MixesDB has a matching set page, it selects that page; if MixesDB has no record, it falls back to a general web search across alternative unblocked tracklist mirrors (OpeningTrack, Brizm, Thomas Laupstad, Tracklist.club).
-- **Markdown Conversion & Deterministic Parsing**: Target web pages are scraped and converted into Markdown. A deterministic parser processes the document line by line:
-  - Locates the "Tracklist" section while ignoring surrounding noise (related mixes, comments, footers).
-  - Strips timestamps, play buttons, list numbers/bullets, record label brackets, and Markdown hyperlinks.
-  - Normalizes whitespace and dash separators (hyphens, en-dashes, em-dashes).
-  - Splits each line into `Artist` and `Title`.
-  - Filters out placeholder entries (like `ID - ID` or `Untitled`) and records them in a skipped items summary.
+- **Hierarchical Web Search**: `fetch-mix` first queries MixesDB via its MediaWiki Search API. If MixesDB has a matching set page, it selects that page; if MixesDB has no record, it queries WordPress REST APIs across unblocked mirrors (OpeningTrack, Tracklist.club).
+- **Native Scraping & Multi-Provider LLM Extraction with Deterministic Fallback**: Target web pages are scraped natively (retrieving raw wikitext for MixesDB or converting HTML to Markdown for mirrors) and processed by `ParseTracklistWithAI`:
+  - **AI-Powered Extraction**: Submits the tracklist content and set title to the active LLM provider (Ollama, LiteLLM, Gemini, OpenAI, Claude, OpenRouter, DeepSeek, Groq, or custom endpoints) using structured schema output.
+  - **Deterministic Pure Regex Fallback**: When offline or if LLM extraction is unavailable, the deterministic parser processes the document line by line:
+    - Locates the "Tracklist" section while ignoring surrounding noise (related mixes, comments, footers).
+    - Strips timestamps, play buttons, list numbers/bullets, record label brackets, and Markdown hyperlinks.
+    - Normalizes whitespace and dash separators (hyphens, en-dashes, em-dashes).
+    - Splits each line into `Artist` and `Title`.
+    - Filters out placeholder entries (like `ID - ID` or `Untitled`) and records them in a skipped items summary.
 
 ### 2. YouTube Comment Tracklist AI Extraction
 
 - **YouTube Video Route**: Passing a YouTube video URL or 11-character video ID automatically routes execution to the YouTube comment extraction engine.
-- **Fetching & Caching Comments**: `fetch-mix` retrieves top comments (up to 200) from YouTube using `yt-dlp` with single-video flags (`--no-playlist`) to ensure quick response times without downloading multi-video playlists. Retrieved comments and extracted tracklists are cached on disk so subsequent runs on the same video ID load instantly.
+- **Fetching & Caching Comments**: `fetch-mix` retrieves top comments (up to 500) from YouTube using `yt-dlp` with single-video flags (`--no-playlist`) to ensure quick response times without downloading multi-video playlists. Retrieved comments and extracted tracklists are cached on disk so subsequent runs on the same video ID load instantly.
 - **Local Candidate Pre-Filtering**: Before sending data to AI models, a local scanner screens all retrieved comments to filter out 99% of chatter and spam. It selects comments with at least 3 lines, high density of dash/colon separators, and multiple digits. Candidate comments are sorted by vote count.
-- **Gemini 2.5 Flash Structured AI Extraction**: Candidate comments are submitted to **Gemini 2.5 Flash** using a strict JSON output schema. The AI identifies the single comment containing the complete DJ set tracklist and returns structured track items (`artist`, `title`, `timestamp`). It also identifies non-track items (speech timestamps like "Thanks speech", chatter, or incomplete entries missing artist names) so they can be logged separately as skipped items.
+- **Structured LLM Extraction**: Candidate comments are submitted to the configured LLM provider (Ollama, LiteLLM, Google Gemini, OpenAI, Anthropic Claude, OpenRouter, DeepSeek, Groq, or custom endpoints) using a strict JSON output schema. The AI identifies the single comment containing the complete DJ set tracklist and returns structured track items (`artist`, `title`, `timestamp`). It also identifies non-track items (speech timestamps like "Thanks speech", chatter, or incomplete entries missing artist names) so they can be logged separately as skipped items.
 
 ### 3. Track Formatting & Download Execution
 
