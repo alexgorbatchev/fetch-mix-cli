@@ -26,6 +26,7 @@ type ProviderInfo struct {
 	EnvVar       string
 	Status       string
 	Active       bool
+	IsDefault    bool
 }
 
 // SupportedProviders defines supported LLM providers in auto-detection priority order.
@@ -45,6 +46,8 @@ var SupportedProviders = []ProviderInfo{
 // GetProviderStatuses checks active environment variables and returns current status for all providers.
 func GetProviderStatuses() []ProviderInfo {
 	result := make([]ProviderInfo, len(SupportedProviders))
+	var defaultFound bool
+
 	for i, p := range SupportedProviders {
 		val := strings.TrimSpace(os.Getenv(p.EnvVar))
 		switch p.ID {
@@ -54,7 +57,13 @@ func GetProviderStatuses() []ProviderInfo {
 			}
 			p.Active = val != "" || strings.TrimSpace(os.Getenv("OLLAMA_URL")) != ""
 			if p.Active {
-				p.Status = "Active"
+				if !defaultFound {
+					p.IsDefault = true
+					p.Status = "Active (Default)"
+					defaultFound = true
+				} else {
+					p.Status = "Active"
+				}
 			} else {
 				p.Status = "Not Set (default: http://localhost:11434)"
 			}
@@ -64,14 +73,26 @@ func GetProviderStatuses() []ProviderInfo {
 			}
 			p.Active = val != "" || strings.TrimSpace(os.Getenv("LITELLM_URL")) != "" || strings.TrimSpace(os.Getenv("LITELLM_API_KEY")) != ""
 			if p.Active {
-				p.Status = "Active"
+				if !defaultFound {
+					p.IsDefault = true
+					p.Status = "Active (Default)"
+					defaultFound = true
+				} else {
+					p.Status = "Active"
+				}
 			} else {
 				p.Status = "Not Set (default: http://localhost:4000)"
 			}
 		default:
 			p.Active = val != ""
 			if p.Active {
-				p.Status = "Active"
+				if !defaultFound {
+					p.IsDefault = true
+					p.Status = "Active (Default)"
+					defaultFound = true
+				} else {
+					p.Status = "Active"
+				}
 			} else {
 				p.Status = "Not Set"
 			}

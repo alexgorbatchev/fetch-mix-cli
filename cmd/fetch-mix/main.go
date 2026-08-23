@@ -151,7 +151,12 @@ parses tracklists deterministically, and downloads individual tracks using fetch
 
 			fmt.Println(sep)
 			fmt.Println("Auto-detection priority order:")
-			fmt.Println("  OLLAMA_HOST -> LITELLM_BASE_URL -> GEMINI_API_KEY -> OPENAI_API_KEY -> ANTHROPIC_API_KEY -> OPENROUTER_API_KEY -> DEEPSEEK_API_KEY -> GROQ_API_KEY")
+			for i, p := range llm.SupportedProviders {
+				if p.ID == "custom" {
+					continue
+				}
+				fmt.Printf("  %d. %-12s (%s)\n", i+1, p.ID, p.EnvVar)
+			}
 			fmt.Println("\nUsage Examples:")
 			fmt.Println("  fetch-mix youtube -p auto <url>")
 			fmt.Println("  fetch-mix youtube -p litellm -m gpt-4o-mini <url>")

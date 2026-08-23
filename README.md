@@ -141,7 +141,7 @@ Supported LLM Providers & Models:
 PROVIDER       DEFAULT MODEL              ENV VAR              STATUS
 --------------------------------------------------
 ollama         llama3.2                   OLLAMA_HOST          Not Set (default: http://localhost:11434)
-litellm        gemini-2.5-flash           LITELLM_BASE_URL     Active
+litellm        gemini-2.5-flash           LITELLM_BASE_URL     Active (Default)
 gemini         gemini-2.5-flash           GEMINI_API_KEY       Active
 openai         gpt-4o-mini                OPENAI_API_KEY       Active
 anthropic      claude-3-5-haiku-latest    ANTHROPIC_API_KEY    Not Set
@@ -151,7 +151,14 @@ groq           llama-3.3-70b-versatile    GROQ_API_KEY         Not Set
 custom         gpt-4o-mini                OPENAI_BASE_URL      Not Set
 ==================================================
 Auto-detection priority order:
-  OLLAMA_HOST -> LITELLM_BASE_URL -> GEMINI_API_KEY -> OPENAI_API_KEY -> ANTHROPIC_API_KEY -> OPENROUTER_API_KEY -> DEEPSEEK_API_KEY -> GROQ_API_KEY
+  1. ollama       (OLLAMA_HOST)
+  2. litellm      (LITELLM_BASE_URL)
+  3. gemini       (GEMINI_API_KEY)
+  4. openai       (OPENAI_API_KEY)
+  5. anthropic    (ANTHROPIC_API_KEY)
+  6. openrouter   (OPENROUTER_API_KEY)
+  7. deepseek     (DEEPSEEK_API_KEY)
+  8. groq         (GROQ_API_KEY)
 ```
 
 ### 4. Custom Output Directory
