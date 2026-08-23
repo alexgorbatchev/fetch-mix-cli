@@ -5,15 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"os"
 	"regexp"
 	"sort"
 	"strings"
 
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/cache"
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/cmdutil"
+	"github.com/alexgorbatchev/fetch-mix-cli/internal/llm"
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/types"
 )
 
@@ -22,19 +20,6 @@ type CommentCandidate struct {
 	Author    string `json:"author"`
 	Text      string `json:"text"`
 	LikeCount int    `json:"like_count"`
-}
-
-type GeminiTrack struct {
-	Artist    string `json:"artist"`
-	Title     string `json:"title"`
-	Timestamp string `json:"timestamp,omitempty"`
-}
-
-type GeminiResult struct {
-	Found        bool                `json:"found"`
-	CommentID    string              `json:"commentId,omitempty"`
-	Tracks       []GeminiTrack       `json:"tracks,omitempty"`
-	SkippedItems []types.SkippedItem `json:"skippedItems,omitempty"`
 }
 
 type youtubeComment struct {
@@ -106,15 +91,8 @@ func PreFilterComments(comments []youtubeComment) []CommentCandidate {
 	return candidates
 }
 
-// ExtractTracklistWithGemini queries Gemini 2.5 Flash API with candidate comments to isolate and parse tracklist.
-func ExtractTracklistWithGemini(ctx context.Context, candidates []CommentCandidate) (*GeminiResult, error) {
-	apiKey := strings.TrimSpace(os.Getenv("GEMINI_API_KEY"))
-	if apiKey == "" {
-		return nil, fmt.Errorf("GEMINI_API_KEY environment variable is not set")
-	}
-
-	apiURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=%s", apiKey)
-
+// ExtractTracklistWithAI builds the extraction prompt and queries the configured LLM provider.
+func ExtractTracklistWithAI(ctx context.Context, candidates []CommentCandidate, providerID, modelName string) (*llm.GeminiResult, error) {
 	var sb strings.Builder
 	sb.WriteString("You are an expert DJ tracklist extractor.\n")
 	sb.WriteString("Below is a list of candidate comments from a YouTube DJ set video.\n")
@@ -126,111 +104,11 @@ func ExtractTracklistWithGemini(ctx context.Context, candidates []CommentCandida
 		sb.WriteString(fmt.Sprintf("--- CANDIDATE %d (ID: %s, Author: %s) ---\n%s\n\n", i+1, c.ID, c.Author, c.Text))
 	}
 
-	sb.WriteString("If no candidate represents a full tracklist, return \"found\": false.\n")
-	sb.WriteString("Otherwise, return \"found\": true, the correct \"commentId\", the list of \"tracks\", and \"skippedItems\".")
+	sb.WriteString("If no candidate represents a full tracklist, return JSON: {\"found\": false}.\n")
+	sb.WriteString("Otherwise, return valid JSON with: {\"found\": true, \"commentId\": \"...\", \"tracks\": [{\"artist\": \"...\", \"title\": \"...\", \"timestamp\": \"...\"}], \"skippedItems\": [{\"timestamp\": \"...\", \"rawText\": \"...\", \"reason\": \"...\"}]}")
 
 	prompt := sb.String()
-
-	payload := map[string]interface{}{
-		"contents": []map[string]interface{}{
-			{
-				"parts": []map[string]interface{}{
-					{"text": prompt},
-				},
-			},
-		},
-		"generationConfig": map[string]interface{}{
-			"responseMimeType": "application/json",
-			"responseSchema": map[string]interface{}{
-				"type": "OBJECT",
-				"properties": map[string]interface{}{
-					"found":     map[string]interface{}{"type": "BOOLEAN"},
-					"commentId": map[string]interface{}{"type": "STRING"},
-					"tracks": map[string]interface{}{
-						"type": "ARRAY",
-						"items": map[string]interface{}{
-							"type": "OBJECT",
-							"properties": map[string]interface{}{
-								"artist":    map[string]interface{}{"type": "STRING"},
-								"title":     map[string]interface{}{"type": "STRING"},
-								"timestamp": map[string]interface{}{"type": "STRING"},
-							},
-							"required": []string{"artist", "title"},
-						},
-					},
-					"skippedItems": map[string]interface{}{
-						"type": "ARRAY",
-						"items": map[string]interface{}{
-							"type": "OBJECT",
-							"properties": map[string]interface{}{
-								"timestamp": map[string]interface{}{"type": "STRING"},
-								"rawText":   map[string]interface{}{"type": "STRING"},
-								"reason":    map[string]interface{}{"type": "STRING"},
-							},
-							"required": []string{"rawText"},
-						},
-					},
-				},
-				"required": []string{"found"},
-			},
-		},
-	}
-
-	payloadBytes, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal Gemini request payload: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewBuffer(payloadBytes))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Gemini HTTP request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("Gemini API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read Gemini response body: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Gemini API returned status %d: %s", resp.StatusCode, string(respBytes))
-	}
-
-	type geminiResponsePart struct {
-		Text string `json:"text"`
-	}
-	type geminiResponseCandidate struct {
-		Content struct {
-			Parts []geminiResponsePart `json:"parts"`
-		} `json:"content"`
-	}
-	type geminiAPIResponse struct {
-		Candidates []geminiResponseCandidate `json:"candidates"`
-	}
-
-	var apiResp geminiAPIResponse
-	if err := json.Unmarshal(respBytes, &apiResp); err != nil {
-		return nil, fmt.Errorf("failed to parse Gemini API JSON wrapper: %w", err)
-	}
-
-	if len(apiResp.Candidates) == 0 || len(apiResp.Candidates[0].Content.Parts) == 0 {
-		return nil, fmt.Errorf("empty text output received from Gemini API")
-	}
-
-	textOutput := apiResp.Candidates[0].Content.Parts[0].Text
-
-	var result GeminiResult
-	if err := json.Unmarshal([]byte(textOutput), &result); err != nil {
-		return nil, fmt.Errorf("failed to parse Gemini structured JSON output: %w", err)
-	}
-
-	return &result, nil
+	return llm.ExtractTracklistWithAI(ctx, providerID, modelName, prompt)
 }
 
 // FetchVideoComments retrieves video info and up to 500 comments via yt-dlp, using local cache if available.
@@ -288,8 +166,8 @@ func FetchVideoComments(ctx context.Context, videoURL string, noCache bool) (*yo
 	return &info, false, nil
 }
 
-// ProcessYouTubeComments runs full pipeline: fetch/cache comments, pre-filter, extract via Gemini.
-func ProcessYouTubeComments(ctx context.Context, videoURL string, noCache bool) ([]types.Track, []types.SkippedItem, string, error) {
+// ProcessYouTubeComments runs full pipeline: fetch/cache comments, pre-filter, extract via LLM.
+func ProcessYouTubeComments(ctx context.Context, videoURL string, noCache bool, providerID, modelName string) ([]types.Track, []types.SkippedItem, string, error) {
 	c, err := cache.New()
 	videoID := ExtractVideoID(videoURL)
 	tracksCacheKey := fmt.Sprintf("yt_tracks_%s.json", videoID)
@@ -319,18 +197,20 @@ func ProcessYouTubeComments(ctx context.Context, videoURL string, noCache bool) 
 		return nil, nil, info.Title, fmt.Errorf("no comments found that look like a tracklist")
 	}
 
-	fmt.Printf("Found %d candidate comments. Querying Gemini 2.5 Flash for tracklist extraction...\n", len(candidates))
-	geminiResult, err := ExtractTracklistWithGemini(ctx, candidates)
+	resolvedP, resolvedM, _ := llm.ResolveProvider(providerID, modelName)
+	fmt.Printf("Found %d candidate comments. Querying LLM provider %s (%s) for tracklist extraction...\n", len(candidates), resolvedP, resolvedM)
+
+	llmResult, err := ExtractTracklistWithAI(ctx, candidates, providerID, modelName)
 	if err != nil {
-		return nil, nil, info.Title, fmt.Errorf("gemini tracklist extraction failed: %w", err)
+		return nil, nil, info.Title, fmt.Errorf("LLM tracklist extraction failed: %w", err)
 	}
 
-	if !geminiResult.Found || len(geminiResult.Tracks) == 0 {
-		return nil, nil, info.Title, fmt.Errorf("gemini could not identify a valid tracklist in the comment candidates")
+	if !llmResult.Found || len(llmResult.Tracks) == 0 {
+		return nil, nil, info.Title, fmt.Errorf("LLM could not identify a valid tracklist in the comment candidates")
 	}
 
 	var tracks []types.Track
-	for _, gt := range geminiResult.Tracks {
+	for _, gt := range llmResult.Tracks {
 		artist := strings.TrimSpace(gt.Artist)
 		title := strings.TrimSpace(gt.Title)
 		if artist != "" && title != "" {
@@ -343,7 +223,7 @@ func ProcessYouTubeComments(ctx context.Context, videoURL string, noCache bool) 
 		}
 	}
 
-	skippedItems := geminiResult.SkippedItems
+	skippedItems := llmResult.SkippedItems
 
 	if c != nil && videoID != "" && !noCache && len(tracks) > 0 {
 		_ = c.Put(tracksCacheKey, CachedYouTubeTracks{

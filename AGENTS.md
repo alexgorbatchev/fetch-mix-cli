@@ -10,7 +10,7 @@ Operational guidelines, architecture, and developer interface specs for AI agent
 
 ### Core Responsibilities
 - **Tracklist Search & Discovery**: Queries MixesDB and unblocked web mirrors (Brizm, OpeningTrack, Thomas Laupstad, Tracklist.club) via `firecrawl`. Accepts 1001tracklists URLs by extracting set slugs and discovering mirrors.
-- **YouTube Comment Intelligence**: Fetches YouTube comments with `yt-dlp` and uses **Gemini 2.5 Flash** with native structured outputs to extract full tracklists from comments.
+- **Multi-Provider LLM Integration**: Uses `github.com/zendev-sh/goai` to extract tracklists from comments across 25+ LLM providers (Google Gemini, OpenAI, Anthropic Claude, OpenRouter, DeepSeek, Groq, Ollama, and custom OpenAI-compatible endpoints).
 - **Intermediary Manifest & Resumable Downloads**: Saves a JSON manifest (`{mix-title}/mix_manifest.json`) tracking download status per track and mapping track indices to actual saved file names on disk. Automatically resumes interrupted downloads.
 - **Default Output Layout**: Downloads tracks into `cwd/{mix-title-from-youtube}/01 - Artist - Title.m4a` by default unless `--out-dir` / `-o` is provided.
 - **Dry-Run Preview (`--dry-run`)**: Parses tracklists and previews planned track output paths, filenames, and `.m3u` playlist structure without performing network downloads or writing files.
@@ -77,18 +77,23 @@ fetch-mix youtube <youtube_url_or_id>
 fetch-mix yt <youtube_url_or_id>
 ```
 
-### Dependencies Subcommand
+### AI Subcommand
 ```bash
-fetch-mix dependencies
-# Alias:
-fetch-mix deps
+fetch-mix ai
+# Aliases:
+fetch-mix providers
+fetch-mix models
 ```
+Prints supported LLM providers, default models, required environment variables, and active API key detection status.
 
 ### Flags
 | Flag | Short | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `--out-dir` | `-o` | `cwd/{mix-title}` | Custom output directory |
 | `--dry-run` | | `false` | Preview tracklist and download plan without downloading |
+| `--no-cache` | | `false` | Disable local caching for search, tracklists, and comments |
+| `--llm-provider` | `-p` | `auto` | LLM provider name (`auto`, `gemini`, `openai`, `anthropic`, `openrouter`, `deepseek`, `groq`, `ollama`, `custom`) |
+| `--llm-model` | `-m` | | LLM model name override (e.g. `gpt-4o-mini`, `claude-3-5-haiku-latest`, `llama3.2`) |
 | `--sources` | `-s` | `youtube,soundcloud` | Comma-separated search sources passed to `fetch-track` |
 | `--interactive` | `-i` | `false` | Interactively choose set search result |
 | `--skip-verify` | | `false` | Skip audio quality spectrum check in `fetch-track` |

@@ -8,7 +8,7 @@
 ## What It Does
 
 - **Finds Full DJ Mix Tracklists**: Searches [MixesDB](https://www.mixesdb.com) and crawlable tracklist web mirrors (OpeningTrack, Brizm, Thomas Laupstad, Tracklist.club) for complete DJ set tracklists.
-- **Extracts Tracklists from YouTube Comments**: Retrieves video comments via `yt-dlp` and uses **Gemini 2.5 Flash** with native structured outputs to extract and clean full set tracklists.
+- **Extracts Tracklists from YouTube Comments**: Retrieves video comments via `yt-dlp` and uses multi-provider LLMs (Google Gemini, OpenAI, Anthropic Claude, OpenRouter, DeepSeek, Groq, Ollama, custom endpoints via `goai`) to extract and clean full set tracklists.
 - **1001Tracklists URL Intelligence**: Resolves `1001tracklists.com` URLs automatically by extracting set slugs and discovering unblocked web mirrors.
 - **Generates Order-Preserving M3U Playlists**: Creates a `playlist.m3u` file inside the mix output folder keeping the exact chronological track order of the set.
 - **Resumable Downloads & Tracking**: Maintains a `mix_manifest.json` file inside the mix folder mapping track titles to actual downloaded file names and resuming interrupted downloads without re-downloading existing tracks.
@@ -118,7 +118,36 @@ Playlist file preview: BORIS REDWALL - СТАНЦИЯ МЕТРО ГОРЬКОВ�
 ### 3. Extract Tracks from YouTube Comments
 
 ```bash
+# Auto-detects active LLM provider (GEMINI_API_KEY / OPENAI_API_KEY / etc.)
 fetch-mix youtube "https://www.youtube.com/watch?v=NeH3RpyocNc"
+
+# Specify explicit LLM provider and model
+fetch-mix youtube -p openai -m gpt-4o-mini "https://www.youtube.com/watch?v=NeH3RpyocNc"
+fetch-mix youtube -p anthropic -m claude-3-5-haiku-latest "https://www.youtube.com/watch?v=NeH3RpyocNc"
+fetch-mix youtube -p ollama -m llama3.2 "https://www.youtube.com/watch?v=NeH3RpyocNc"
+```
+
+### 4. Inspect Supported AI Providers and Models
+
+```bash
+fetch-mix ai
+```
+
+Sample Output:
+```
+==================================================
+Supported LLM Providers & Models:
+==================================================
+PROVIDER       DEFAULT MODEL              ENV VAR              STATUS
+gemini         gemini-2.5-flash           GEMINI_API_KEY       Active
+openai         gpt-4o-mini                OPENAI_API_KEY       Active
+anthropic      claude-3-5-haiku-latest    ANTHROPIC_API_KEY    Not Set
+openrouter     google/gemini-2.5-flash    OPENROUTER_API_KEY   Active
+deepseek       deepseek-chat              DEEPSEEK_API_KEY     Not Set
+groq           llama-3.3-70b-versatile    GROQ_API_KEY         Not Set
+ollama         llama3.2                   OLLAMA_HOST          Not Set (default: http://localhost:11434)
+custom         gpt-4o-mini                OPENAI_BASE_URL      Not Set
+==================================================
 ```
 
 ### 4. Custom Output Directory
@@ -152,6 +181,8 @@ All required dependencies are installed and operational.
 | `--out-dir` | `-o` | `cwd/{mix-title}` | Folder where mix tracks are saved |
 | `--dry-run` | | `false` | Preview tracklist and download plan without downloading |
 | `--no-cache` | | `false` | Disable local caching for search queries, tracklists, and comments |
+| `--llm-provider` | `-p` | `auto` | LLM provider name (`auto`, `gemini`, `openai`, `anthropic`, `openrouter`, `deepseek`, `groq`, `ollama`, `custom`) |
+| `--llm-model` | `-m` | | LLM model name override (e.g. `gpt-4o-mini`, `claude-3-5-haiku-latest`, `llama3.2`) |
 | `--sources` | `-s` | `youtube,soundcloud` | Comma-separated search sources passed to `fetch-track` |
 | `--interactive` | `-i` | `false` | Interactively choose set search result |
 | `--skip-verify` | | `false` | Skip audio quality spectrum check in `fetch-track` |

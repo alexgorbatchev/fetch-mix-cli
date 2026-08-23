@@ -4,6 +4,7 @@ go 1.26.2
 
 require (
 	github.com/spf13/cobra v1.10.2
+	github.com/zendev-sh/goai v0.9.7
 	golang.org/x/term v0.45.0
 )
 
