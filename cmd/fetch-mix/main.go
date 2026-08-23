@@ -174,7 +174,7 @@ parses tracklists deterministically, and downloads individual tracks using fetch
 	depsCmd := &cobra.Command{
 		Use:          "dependencies",
 		Aliases:      []string{"deps"},
-		Short:        "Verify required external binary dependencies (fetch-track, yt-dlp, ffmpeg, firecrawl)",
+		Short:        "Verify required external binary dependencies (fetch-track, yt-dlp, ffmpeg)",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			isAgent := deps.IsAgentMode()
@@ -219,7 +219,7 @@ parses tracklists deterministically, and downloads individual tracks using fetch
 	depsInstallCmd := &cobra.Command{
 		Use:          "install [dependency...]",
 		Aliases:      []string{"add", "get"},
-		Short:        "Install missing external dependencies (fetch-track, firecrawl, yt-dlp, ffmpeg)",
+		Short:        "Install missing external dependencies (fetch-track, yt-dlp, ffmpeg)",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_ = deps.InitManagedPath()
@@ -446,8 +446,11 @@ func runMixPipeline(ctx context.Context, query string) error {
 		return fmt.Errorf("scraping error: %w", err)
 	}
 
-	tracks, skippedItems := parser.ParseTracklist(markdown)
-	if len(tracks) == 0 {
+	tracks, skippedItems, err := parser.ParseTracklistWithAI(ctx, markdown, chosenSet.Title, llmProvider, llmModel)
+	if err != nil || len(tracks) == 0 {
+		if err != nil {
+			return fmt.Errorf("could not extract tracks from tracklist page: %w", err)
+		}
 		return fmt.Errorf("could not extract any tracks from the tracklist page")
 	}
 

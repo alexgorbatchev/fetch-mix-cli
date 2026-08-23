@@ -256,3 +256,19 @@ func ExtractTracklistWithAI(ctx context.Context, providerID, modelName string, p
 
 	return &res.Object, nil
 }
+
+// ExtractTracklistFromContentWithAI builds a prompt to parse a DJ tracklist from markdown or webpage content.
+func ExtractTracklistFromContentWithAI(ctx context.Context, providerID, modelName string, content, setTitle string) (*GeminiResult, error) {
+	var sb strings.Builder
+	sb.WriteString("You are an expert DJ set tracklist parser.\n")
+	sb.WriteString(fmt.Sprintf("Below is the markdown/wikitext/text content for a DJ mix titled %q.\n", setTitle))
+	sb.WriteString("Extract all valid tracks in set order with their accurate artist name and track title.\n")
+	sb.WriteString("Extract timestamps if available (e.g. \"00:00\", \"12:34\", \"01:23:45\", \"[000]\").\n")
+	sb.WriteString("Separate and exclude any non-track entries (intro/outro markers, speech/commentary, radio jingles, placeholder entries like 'ID - ID' or 'Untitled') into \"skippedItems\" with \"timestamp\", \"rawText\", and \"reason\" (e.g. \"intro\", \"outro\", \"speech\", \"placeholder\").\n\n")
+	sb.WriteString("Content:\n")
+	sb.WriteString(content)
+	sb.WriteString("\n\nReturn valid JSON: {\"found\": true, \"tracks\": [{\"artist\": \"...\", \"title\": \"...\", \"timestamp\": \"...\"}], \"skippedItems\": [{\"timestamp\": \"...\", \"rawText\": \"...\", \"reason\": \"...\"}]}")
+
+	prompt := sb.String()
+	return ExtractTracklistWithAI(ctx, providerID, modelName, prompt)
+}

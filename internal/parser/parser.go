@@ -1,9 +1,12 @@
 package parser
 
 import (
+	"context"
+	"fmt"
 	"regexp"
 	"strings"
 
+	"github.com/alexgorbatchev/fetch-mix-cli/internal/llm"
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/types"
 )
 
@@ -150,4 +153,35 @@ func ParseTracklist(markdown string) ([]types.Track, []types.SkippedItem) {
 	}
 
 	return tracks, skipped
+}
+
+// ParseTracklistWithAI extracts structured tracks using configured LLM provider,
+// falling back to deterministic regex parsing if LLM is not configured or encounters an error.
+func ParseTracklistWithAI(ctx context.Context, content, setTitle, providerID, modelName string) ([]types.Track, []types.SkippedItem, error) {
+	// Attempt AI extraction first if LLM is available
+	aiResult, err := llm.ExtractTracklistFromContentWithAI(ctx, providerID, modelName, content, setTitle)
+	if err == nil && aiResult != nil && len(aiResult.Tracks) > 0 {
+		var tracks []types.Track
+		for _, tr := range aiResult.Tracks {
+			raw := tr.Artist + " - " + tr.Title
+			tracks = append(tracks, types.Track{
+				Artist:    strings.TrimSpace(tr.Artist),
+				Title:     strings.TrimSpace(tr.Title),
+				RawString: strings.TrimSpace(raw),
+				Timestamp: strings.TrimSpace(tr.Timestamp),
+			})
+		}
+		return tracks, aiResult.SkippedItems, nil
+	}
+
+	// Fallback to deterministic regex-based parser
+	detTracks, detSkipped := ParseTracklist(content)
+	if len(detTracks) > 0 {
+		return detTracks, detSkipped, nil
+	}
+
+	if err != nil {
+		return nil, nil, fmt.Errorf("AI tracklist parsing failed: %w", err)
+	}
+	return nil, nil, fmt.Errorf("could not extract any tracks from content")
 }

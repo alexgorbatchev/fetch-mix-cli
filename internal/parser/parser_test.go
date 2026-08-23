@@ -128,3 +128,25 @@ Download: zippyshare
 		})
 	}
 }
+
+func TestParseTracklistWithAI_Fallback(t *testing.T) {
+	ctx := t.Context()
+	markdown := `
+# Mix Title
+
+Tracklist
+---------
+1. Artist 1 - Track 1
+2. Artist 2 - Track 2
+`
+	tracks, _, err := ParseTracklistWithAI(ctx, markdown, "Mix Title", "auto", "")
+	if err != nil {
+		t.Fatalf("ParseTracklistWithAI returned error: %v", err)
+	}
+	if len(tracks) != 2 {
+		t.Fatalf("expected 2 tracks from fallback parser, got %d", len(tracks))
+	}
+	if tracks[0].Artist != "Artist 1" || tracks[0].Title != "Track 1" {
+		t.Errorf("unexpected track 0: %#v", tracks[0])
+	}
+}
