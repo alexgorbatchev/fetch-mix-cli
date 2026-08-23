@@ -1,20 +1,28 @@
 # Binaries and build outputs
 bin/
+/fetch-mix
+fetch-mix-cli
 *.exe
-*.exe?
+*.exe~
 *.dll
 *.so
 *.dylib
 *.test
 *.out
-/fetch-mix
 
-# Local temporary cache & downloads
+# Directories and symlinks
 .tmp/
 downloads/
+.codegraph
+.codegraph/
+.cache/
+.pi-subagents/
+dist/
+build/
 
 # IDE & OS files
 .DS_Store
 .idea/
 .vscode/
-.codegraph
+*.swp
+*.swo

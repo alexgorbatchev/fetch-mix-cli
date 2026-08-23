@@ -35,4 +35,4 @@ fmt:
 
 # Clean up build binaries and temporary files
 clean:
-	rm -rf bin fetch-mix coverage.out .tmp
+	rm -rf bin fetch-mix coverage.out .tmp dist
