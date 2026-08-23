@@ -99,7 +99,6 @@ Found cached tracklist on disk for YouTube video ID "NeH3RpyocNc"
 ==================================================
 DRY RUN PREVIEW - No files will be downloaded
 ==================================================
-Mix / Set Title   : BORIS REDWALL / СТАНЦИЯ МЕТРО ГОРЬКОВСКАЯ / LA GRANDE FINALE 2025
 Target Directory  : BORIS REDWALL - СТАНЦИЯ МЕТРО ГОРЬКОВСКАЯ - LA GRANDE FINALE 2025/
 Playlist File     : BORIS REDWALL - СТАНЦИЯ МЕТРО ГОРЬКОВСКАЯ - LA GRANDE FINALE 2025/playlist.m3u
 Manifest File     : BORIS REDWALL - СТАНЦИЯ МЕТРО ГОРЬКОВСКАЯ - LA GRANDE FINALE 2025/mix_manifest.json

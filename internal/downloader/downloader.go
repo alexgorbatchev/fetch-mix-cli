@@ -198,7 +198,6 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 		fmt.Printf("\n%s\n", sep)
 		fmt.Println("DRY RUN PREVIEW - No files will be downloaded")
 		fmt.Printf("%s\n", sep)
-		fmt.Printf("Mix / Set Title   : %s\n", opts.MixTitle)
 		fmt.Printf("Target Directory  : %s/\n", targetDir)
 		fmt.Printf("Playlist File     : %s\n", playlistPath)
 		fmt.Printf("Total Tracks      : %d\n", totalTracks)
