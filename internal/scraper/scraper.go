@@ -18,6 +18,10 @@ const (
 	defaultHTTPTimeout = 20 * time.Second
 )
 
+var (
+	mixesDBHost = "mixesdb.com"
+)
+
 type cachedScrapedMarkdown struct {
 	URL      string `json:"url"`
 	Markdown string `json:"markdown"`
@@ -63,10 +67,10 @@ func fetchPageContent(ctx context.Context, urlStr string) (string, error) {
 	}
 
 	// MixesDB: fetch raw wikitext directly for 100% clean formatting
-	if strings.Contains(strings.ToLower(u.Host), "mixesdb.com") && strings.HasPrefix(u.Path, "/w/") {
+	if strings.Contains(strings.ToLower(u.Host), mixesDBHost) && strings.HasPrefix(u.Path, "/w/") {
 		titleSlug := strings.TrimPrefix(u.Path, "/w/")
 		if titleSlug != "" {
-			rawURL := fmt.Sprintf("https://%s/w/index.php?title=%s&action=raw", u.Host, titleSlug)
+			rawURL := fmt.Sprintf("%s://%s/w/index.php?title=%s&action=raw", u.Scheme, u.Host, titleSlug)
 			rawContent, rawErr := fetchHTTPBody(ctx, rawURL)
 			if rawErr == nil && strings.TrimSpace(rawContent) != "" && !strings.HasPrefix(strings.TrimSpace(rawContent), "<!DOCTYPE") {
 				return rawContent, nil

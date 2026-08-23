@@ -81,7 +81,7 @@ func LoadOrCreateManifest(targetDir, mixTitle string, tracks []types.Track, skip
 
 // SaveManifest writes the MixManifest to disk as targetDir/mix_manifest.json.
 func SaveManifest(m *MixManifest) error {
-	if m.TargetDir == "" {
+	if m == nil || m.TargetDir == "" {
 		return nil
 	}
 	m.UpdatedAt = time.Now()

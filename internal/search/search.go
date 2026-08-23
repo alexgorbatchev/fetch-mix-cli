@@ -24,6 +24,17 @@ var (
 	tracklistClubAPI = "https://tracklist.club/wp-json/wp/v2/posts"
 )
 
+// SetMixesDBBaseURLForTest configures the MixesDB base URL for testing.
+func SetMixesDBBaseURLForTest(u string) {
+	mixesDBBaseURL = u
+}
+
+// SetMirrorsBaseURLForTest configures mirror base URLs for testing.
+func SetMirrorsBaseURLForTest(otURL, tcURL string) {
+	openingTrackAPI = otURL
+	tracklistClubAPI = tcURL
+}
+
 type mixesDBSearchResponse struct {
 	Query struct {
 		Search []struct {

@@ -242,6 +242,13 @@ type SocketServer struct {
 	cancel     context.CancelFunc
 }
 
+var forceTCPListener bool
+
+// SetForceTCPListenerForTest configures TCP listener forcing for testing.
+func SetForceTCPListenerForTest(force bool) {
+	forceTCPListener = force
+}
+
 // StartSocketServer creates a progress socket listener.
 // On POSIX systems, it uses a UNIX domain socket.
 // On Windows or if UNIX sockets fail, it falls back to a local TCP socket (127.0.0.1:0).
@@ -252,7 +259,7 @@ func StartSocketServer(ctx context.Context, onEvent func(Event)) (*SocketServer,
 	var targetURI string
 	var sockPath string
 
-	if runtime.GOOS != "windows" {
+	if runtime.GOOS != "windows" && !forceTCPListener {
 		sockPath = filepath.Join(os.TempDir(), fmt.Sprintf("ft_%d_%d.sock", os.Getpid(), time.Now().UnixNano()))
 		_ = os.Remove(sockPath)
 

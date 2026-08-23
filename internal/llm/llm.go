@@ -147,15 +147,8 @@ type GeminiResult struct {
 	SkippedItems []types.SkippedItem `json:"skippedItems,omitempty"`
 }
 
-// ExtractTracklistWithAI queries the configured provider via goai for tracklist extraction.
-func ExtractTracklistWithAI(ctx context.Context, providerID, modelName string, prompt string) (*GeminiResult, error) {
-	resolvedProvider, modelName, err := ResolveProvider(providerID, modelName)
-	if err != nil {
-		return nil, err
-	}
-
-	var model provider.LanguageModel
-
+// InitProviderModel initializes the LanguageModel for the requested provider.
+func InitProviderModel(resolvedProvider, modelName string) (provider.LanguageModel, error) {
 	switch resolvedProvider {
 	case "ollama":
 		host := strings.TrimSpace(os.Getenv("OLLAMA_HOST"))
@@ -163,10 +156,9 @@ func ExtractTracklistWithAI(ctx context.Context, providerID, modelName string, p
 			host = strings.TrimSpace(os.Getenv("OLLAMA_URL"))
 		}
 		if host != "" {
-			model = ollama.Chat(modelName, ollama.WithBaseURL(host))
-		} else {
-			model = ollama.Chat(modelName)
+			return ollama.Chat(modelName, ollama.WithBaseURL(host)), nil
 		}
+		return ollama.Chat(modelName), nil
 	case "litellm":
 		baseURL := strings.TrimSpace(os.Getenv("LITELLM_BASE_URL"))
 		if baseURL == "" {
@@ -190,49 +182,43 @@ func ExtractTracklistWithAI(ctx context.Context, providerID, modelName string, p
 		if key != "" {
 			opts = append(opts, compat.WithAPIKey(key))
 		}
-		model = compat.Chat(modelName, opts...)
+		return compat.Chat(modelName, opts...), nil
 	case "gemini":
 		key := strings.TrimSpace(os.Getenv("GEMINI_API_KEY"))
 		if key != "" {
-			model = google.Chat(modelName, google.WithAPIKey(key))
-		} else {
-			model = google.Chat(modelName)
+			return google.Chat(modelName, google.WithAPIKey(key)), nil
 		}
+		return google.Chat(modelName), nil
 	case "openai":
 		key := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
 		if key != "" {
-			model = openai.Chat(modelName, openai.WithAPIKey(key))
-		} else {
-			model = openai.Chat(modelName)
+			return openai.Chat(modelName, openai.WithAPIKey(key)), nil
 		}
+		return openai.Chat(modelName), nil
 	case "anthropic":
 		key := strings.TrimSpace(os.Getenv("ANTHROPIC_API_KEY"))
 		if key != "" {
-			model = anthropic.Chat(modelName, anthropic.WithAPIKey(key))
-		} else {
-			model = anthropic.Chat(modelName)
+			return anthropic.Chat(modelName, anthropic.WithAPIKey(key)), nil
 		}
+		return anthropic.Chat(modelName), nil
 	case "openrouter":
 		key := strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY"))
 		if key != "" {
-			model = openrouter.Chat(modelName, openrouter.WithAPIKey(key))
-		} else {
-			model = openrouter.Chat(modelName)
+			return openrouter.Chat(modelName, openrouter.WithAPIKey(key)), nil
 		}
+		return openrouter.Chat(modelName), nil
 	case "deepseek":
 		key := strings.TrimSpace(os.Getenv("DEEPSEEK_API_KEY"))
 		if key != "" {
-			model = deepseek.Chat(modelName, deepseek.WithAPIKey(key))
-		} else {
-			model = deepseek.Chat(modelName)
+			return deepseek.Chat(modelName, deepseek.WithAPIKey(key)), nil
 		}
+		return deepseek.Chat(modelName), nil
 	case "groq":
 		key := strings.TrimSpace(os.Getenv("GROQ_API_KEY"))
 		if key != "" {
-			model = groq.Chat(modelName, groq.WithAPIKey(key))
-		} else {
-			model = groq.Chat(modelName)
+			return groq.Chat(modelName, groq.WithAPIKey(key)), nil
 		}
+		return groq.Chat(modelName), nil
 	case "custom":
 		baseURL := strings.TrimSpace(os.Getenv("OPENAI_BASE_URL"))
 		if baseURL == "" {
@@ -244,9 +230,22 @@ func ExtractTracklistWithAI(ctx context.Context, providerID, modelName string, p
 		if key != "" {
 			opts = append(opts, compat.WithAPIKey(key))
 		}
-		model = compat.Chat(modelName, opts...)
+		return compat.Chat(modelName, opts...), nil
 	default:
 		return nil, fmt.Errorf("unsupported provider %q", resolvedProvider)
+	}
+}
+
+// ExtractTracklistWithAI queries the configured provider via goai for tracklist extraction.
+func ExtractTracklistWithAI(ctx context.Context, providerID, modelName string, prompt string) (*GeminiResult, error) {
+	resolvedProvider, modelName, err := ResolveProvider(providerID, modelName)
+	if err != nil {
+		return nil, err
+	}
+
+	model, err := InitProviderModel(resolvedProvider, modelName)
+	if err != nil {
+		return nil, err
 	}
 
 	res, err := goai.GenerateObject[GeminiResult](ctx, model, goai.WithPrompt(prompt))

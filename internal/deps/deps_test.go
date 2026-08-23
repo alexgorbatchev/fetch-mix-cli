@@ -67,7 +67,17 @@ func TestCompareVersions(t *testing.T) {
 		{"2024.09.01", "2024.08.01", false},
 		{"2024.07.01", "2024.08.01", true},
 		{"dev", "0.1.0", false},
-		{"1.2.0", "1.1.0", false},
+		{"N-12345", "1.0.0", false},
+		{"git-master", "1.0.0", false},
+		{"abc", "1.0.0", false},
+		{"1.0.0", "abc", false},
+		{"1.invalid.3", "1.0.0", false},
+		{"1.alpha.2", "1.0.0", false},
+		{"1.0.0.1", "1.0.0", false},
+		{"1.0.0", "1.0.0.1", true},
+		{"1.0.0-rc1", "1.0.0", false},
+		{"1.0.0+build", "1.0.0", false},
+		{"1.2.0-beta+123", "1.1.0", false},
 		{"1.0.0", "1.1.0", true},
 		{"", "1.0.0", false},
 	}
@@ -77,6 +87,21 @@ func TestCompareVersions(t *testing.T) {
 		if (err != nil) != tt.wantErr {
 			t.Errorf("CompareVersions(%q, %q) error = %v, wantErr %v", tt.actual, tt.min, err, tt.wantErr)
 		}
+	}
+}
+
+func TestIsNotFound(t *testing.T) {
+	if isNotFound(nil) {
+		t.Errorf("isNotFound(nil) should be false")
+	}
+	if !isNotFound(&exec.Error{Err: exec.ErrNotFound}) {
+		t.Errorf("isNotFound(exec.ErrNotFound) should be true")
+	}
+	if !isNotFound(errors.New("executable file not found in $PATH")) {
+		t.Errorf("isNotFound('not found') should be true")
+	}
+	if isNotFound(errors.New("permission denied")) {
+		t.Errorf("isNotFound('permission denied') should be false")
 	}
 }
 
@@ -119,6 +144,13 @@ func TestVerifyDependenciesWithRunner(t *testing.T) {
 		t.Errorf("expected unsatisfied report for missing binary")
 	}
 
+	// 2b. Missing binary in non-agent mode
+	t.Setenv("AGENT", "0")
+	reports, err = VerifyDependenciesWithRunner(ctx, mockRunnerMissing, nil)
+	if err == nil {
+		t.Errorf("expected error for missing binaries in non-agent mode")
+	}
+
 	// 3. Outdated binary in non-agent mode
 	t.Setenv("AGENT", "0")
 	mockRunnerOutdated := func(ctx context.Context, name string, args ...string) ([]byte, error) {
@@ -137,6 +169,12 @@ func TestVerifyDependenciesWithRunner(t *testing.T) {
 	if err == nil {
 		t.Errorf("expected error for generic failure")
 	}
+
+	// 5. Runner returns empty version string
+	mockRunnerEmpty := func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		return []byte(""), nil
+	}
+	_, _ = VerifyDependenciesWithRunner(ctx, mockRunnerEmpty, nil)
 }
 
 func TestVerifyDependencies_WithCache(t *testing.T) {
@@ -177,10 +215,14 @@ func TestCheckDependencies_Helpers(t *testing.T) {
 	}
 
 	tempDir := t.TempDir()
-	c, _ := cache.New(tempDir)
-	_ = c.Put("deps_fetch-track.json", "1.5.0")
-	_ = c.Put("deps_yt-dlp.json", "2025.01.01")
-	_ = c.Put("deps_ffmpeg.json", "ffmpeg version 6.0")
+	t.Setenv("FETCH_MIX_DEV", "0")
+	t.Setenv("XDG_CACHE_HOME", tempDir)
+	c, _ := cache.New()
+	if c != nil {
+		_ = c.Put("deps_fetch-track.json", "1.5.0")
+		_ = c.Put("deps_yt-dlp.json", "2025.01.01")
+		_ = c.Put("deps_ffmpeg.json", "ffmpeg version 6.0")
+	}
 
 	if err := CheckDependencies(ctx, c); err != nil {
 		t.Errorf("CheckDependencies with cache failed: %v", err)
@@ -189,6 +231,10 @@ func TestCheckDependencies_Helpers(t *testing.T) {
 	if _, err := VerifyDependencies(ctx, c); err != nil {
 		t.Errorf("VerifyDependencies with cache failed: %v", err)
 	}
+
+	// Call without cacheInst arg to test default cache creation
+	_ = CheckDependencies(ctx)
+	_, _ = VerifyDependencies(ctx)
 }
 
 func TestDefaultRunner(t *testing.T) {

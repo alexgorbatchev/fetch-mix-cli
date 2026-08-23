@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -27,6 +28,7 @@ func TestParseTarget(t *testing.T) {
 		{"fd://3", "fd", false},
 		{"stdout", "stdout", false},
 		{"stderr", "stderr", false},
+		{"unrecognized_target_string", "", true},
 		{"", "", true},
 	}
 
@@ -316,4 +318,58 @@ func TestNewReporter_StdoutStderr(t *testing.T) {
 		t.Fatalf("stderr emit failed: %v", err)
 	}
 	_ = rStderr.Close()
+}
+
+func TestNewReporter_Errors(t *testing.T) {
+	ctx := context.Background()
+
+	// Invalid target string
+	if _, err := progress.NewReporter(ctx, ""); err == nil {
+		t.Errorf("expected error for empty target")
+	}
+
+	// Invalid FD
+	if _, err := progress.NewReporter(ctx, "fd://invalid"); err == nil {
+		t.Errorf("expected error for invalid fd")
+	}
+
+	// Unsupported scheme
+	if _, err := progress.NewReporter(ctx, "ftp://example.com"); err == nil {
+		t.Errorf("expected error for unsupported scheme")
+	}
+
+	// Non-existent unix socket dial error
+	if _, err := progress.NewReporter(ctx, "unix:///tmp/non-existent-sock-123.sock"); err == nil {
+		t.Errorf("expected error for non-existent unix socket")
+	}
+
+	// Non-existent tcp dial error
+	if _, err := progress.NewReporter(ctx, "tcp://127.0.0.1:54321"); err == nil {
+		t.Errorf("expected error for closed tcp port")
+	}
+}
+
+func TestStartSocketServer_TCPFallback(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	progress.SetForceTCPListenerForTest(true)
+	defer progress.SetForceTCPListenerForTest(false)
+
+	var receivedEvents []progress.Event
+	var mu sync.Mutex
+
+	srv, uri, err := progress.StartSocketServer(ctx, func(e progress.Event) {
+		mu.Lock()
+		receivedEvents = append(receivedEvents, e)
+		mu.Unlock()
+	})
+	if err != nil {
+		t.Fatalf("StartSocketServer with TCP fallback failed: %v", err)
+	}
+	defer srv.Close()
+
+	if !strings.HasPrefix(uri, "tcp://") {
+		t.Errorf("expected URI prefix tcp://, got %q", uri)
+	}
 }

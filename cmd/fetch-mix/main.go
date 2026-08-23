@@ -56,6 +56,27 @@ func main() {
 		os.Exit(130)
 	}()
 
+	if code := runMain(ctx); code != 0 {
+		os.Exit(code)
+	}
+}
+
+func runMain(ctx context.Context) int {
+	if err := execute(ctx); err != nil {
+		if ctx.Err() != nil {
+			fmt.Fprintln(os.Stderr, "Operation canceled by user.")
+			return 130
+		}
+		return 1
+	}
+	return 0
+}
+
+func execute(ctx context.Context) error {
+	return newRootCmd().ExecuteContext(ctx)
+}
+
+func newRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:          "fetch-mix <set_title_or_url>",
 		Short:        "Fetch, extract, and download entire DJ mix tracklists using fetch-track CLI",
@@ -304,13 +325,7 @@ parses tracklists deterministically, and downloads individual tracks using fetch
 	rootCmd.AddCommand(depsCmd)
 	rootCmd.AddCommand(upgradeCmd)
 
-	if err := rootCmd.ExecuteContext(ctx); err != nil {
-		if ctx.Err() != nil {
-			fmt.Fprintln(os.Stderr, "Operation canceled by user.")
-			os.Exit(130)
-		}
-		os.Exit(1)
-	}
+	return rootCmd
 }
 
 func resolveProgressReporter(ctx context.Context) (*progress.Reporter, error) {

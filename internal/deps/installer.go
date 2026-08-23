@@ -74,9 +74,15 @@ func InitManagedPath() error {
 	return os.Setenv("PATH", newPath)
 }
 
+var (
+	githubBaseURL        = "https://github.com"
+	packageManagerRunner = DefaultRunner
+	lookPathFunc         = exec.LookPath
+)
+
 // ResolveLatestTag queries the latest release tag for a GitHub repository without using the GitHub API.
 func ResolveLatestTag(ctx context.Context, owner, repo string) (string, error) {
-	return ResolveLatestTagWithBaseURL(ctx, "https://github.com", owner, repo)
+	return ResolveLatestTagWithBaseURL(ctx, githubBaseURL, owner, repo)
 }
 
 // ResolveLatestTagWithBaseURL queries the latest release tag for a repository from a custom base URL.
@@ -97,7 +103,10 @@ func ResolveLatestTagWithBaseURL(ctx context.Context, baseURL, owner, repo strin
 	}
 
 	resp, err := client.Do(req)
-	if err != nil {
+	if err != nil || (resp != nil && (resp.StatusCode == http.StatusMethodNotAllowed || resp.StatusCode == http.StatusBadRequest)) {
+		if resp != nil {
+			_ = resp.Body.Close()
+		}
 		// Fall back to GET if HEAD method fails or is rejected
 		reqGet, getErr := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
 		if getErr == nil {
@@ -129,14 +138,16 @@ func ResolveLatestTagWithBaseURL(ctx context.Context, baseURL, owner, repo strin
 
 // DownloadAndExtractGoBinary downloads and extracts a Go binary from a GitHub release without using GitHub API.
 func DownloadAndExtractGoBinary(ctx context.Context, owner, repo, binName, targetDir string) error {
+	return downloadAndExtractGoBinaryForOS(ctx, runtime.GOOS, runtime.GOARCH, owner, repo, binName, targetDir)
+}
+
+func downloadAndExtractGoBinaryForOS(ctx context.Context, osName, archName, owner, repo, binName, targetDir string) error {
 	tag, err := ResolveLatestTag(ctx, owner, repo)
 	if err != nil {
 		return fmt.Errorf("resolving latest release for %s/%s: %w", owner, repo, err)
 	}
 
 	cleanVer := strings.TrimPrefix(tag, "v")
-	osName := runtime.GOOS
-	archName := runtime.GOARCH
 
 	isZip := (osName == "windows")
 	ext := "tar.gz"
@@ -147,7 +158,7 @@ func DownloadAndExtractGoBinary(ctx context.Context, owner, repo, binName, targe
 	}
 
 	assetName := fmt.Sprintf("%s_%s_%s_%s.%s", binName, cleanVer, osName, archName, ext)
-	assetURL := fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/%s", owner, repo, tag, assetName)
+	assetURL := fmt.Sprintf("%s/%s/%s/releases/download/%s/%s", strings.TrimRight(githubBaseURL, "/"), owner, repo, tag, assetName)
 
 	return downloadAndExtractAsset(ctx, assetURL, execName, targetDir, isZip)
 }
@@ -323,11 +334,15 @@ func downloadDirectBinary(ctx context.Context, downloadURL, binName, targetDir s
 
 // InstallYtDlp downloads the standalone yt-dlp binary into targetDir.
 func InstallYtDlp(ctx context.Context, targetDir string) error {
+	return installYtDlpForOS(ctx, runtime.GOOS, targetDir)
+}
+
+func installYtDlpForOS(ctx context.Context, goos, targetDir string) error {
 	binName := "yt-dlp"
-	downloadURL := "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
-	if runtime.GOOS == "windows" {
+	downloadURL := fmt.Sprintf("%s/yt-dlp/yt-dlp/releases/latest/download/yt-dlp", strings.TrimRight(githubBaseURL, "/"))
+	if goos == "windows" {
 		binName = "yt-dlp.exe"
-		downloadURL = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
+		downloadURL = fmt.Sprintf("%s/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe", strings.TrimRight(githubBaseURL, "/"))
 	}
 
 	return downloadDirectBinary(ctx, downloadURL, binName, targetDir)
@@ -350,35 +365,39 @@ func UpdateYtDlp(ctx context.Context, runner CommandRunner, targetDir string) er
 
 // InstallFFmpeg attempts to install ffmpeg using the host system package manager.
 func InstallFFmpeg(ctx context.Context, runner CommandRunner) error {
+	return installFFmpegForOS(ctx, runtime.GOOS, runner)
+}
+
+func installFFmpegForOS(ctx context.Context, goos string, runner CommandRunner) error {
 	if runner == nil {
 		runner = DefaultRunner
 	}
 
-	switch runtime.GOOS {
+	switch goos {
 	case "darwin":
-		if _, err := exec.LookPath("brew"); err == nil {
+		if _, err := lookPathFunc("brew"); err == nil {
 			_, err := runner(ctx, "brew", "install", "ffmpeg")
 			return err
 		}
 	case "linux":
-		if _, err := exec.LookPath("apt-get"); err == nil {
+		if _, err := lookPathFunc("apt-get"); err == nil {
 			_, err := runner(ctx, "apt-get", "install", "-y", "ffmpeg")
 			return err
 		}
-		if _, err := exec.LookPath("pacman"); err == nil {
+		if _, err := lookPathFunc("pacman"); err == nil {
 			_, err := runner(ctx, "pacman", "-S", "--noconfirm", "ffmpeg")
 			return err
 		}
-		if _, err := exec.LookPath("dnf"); err == nil {
+		if _, err := lookPathFunc("dnf"); err == nil {
 			_, err := runner(ctx, "dnf", "install", "-y", "ffmpeg")
 			return err
 		}
 	case "windows":
-		if _, err := exec.LookPath("winget"); err == nil {
+		if _, err := lookPathFunc("winget"); err == nil {
 			_, err := runner(ctx, "winget", "install", "--id", "Gyan.FFmpeg", "-e", "--silent")
 			return err
 		}
-		if _, err := exec.LookPath("choco"); err == nil {
+		if _, err := lookPathFunc("choco"); err == nil {
 			_, err := runner(ctx, "choco", "install", "ffmpeg", "-y")
 			return err
 		}
@@ -406,7 +425,7 @@ func InstallDependency(ctx context.Context, depName string) error {
 	case "yt-dlp":
 		return InstallYtDlp(ctx, binDir)
 	case "ffmpeg", "ffprobe":
-		return InstallFFmpeg(ctx, DefaultRunner)
+		return InstallFFmpeg(ctx, packageManagerRunner)
 	default:
 		return fmt.Errorf("unknown dependency %q", depName)
 	}
@@ -429,9 +448,9 @@ func UpdateDependency(ctx context.Context, depName string) error {
 	case "fetch-track":
 		return DownloadAndExtractGoBinary(ctx, "alexgorbatchev", "fetch-track-cli", "fetch-track", binDir)
 	case "yt-dlp":
-		return UpdateYtDlp(ctx, DefaultRunner, binDir)
+		return UpdateYtDlp(ctx, packageManagerRunner, binDir)
 	case "ffmpeg", "ffprobe":
-		return InstallFFmpeg(ctx, DefaultRunner)
+		return InstallFFmpeg(ctx, packageManagerRunner)
 	default:
 		return fmt.Errorf("unknown dependency %q", depName)
 	}

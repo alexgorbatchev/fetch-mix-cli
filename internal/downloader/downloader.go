@@ -31,7 +31,11 @@ type DownloadOptions struct {
 	ProgressReporter *progress.Reporter
 }
 
-var rxInvalidChars = regexp.MustCompile(`[/\\?%*:|"<>]+`)
+var (
+	rxInvalidChars     = regexp.MustCompile(`[/\\?%*:|"<>]+`)
+	fetchTrackCmdName  = "fetch-track"
+	trackDownloadDelay = 1000 * time.Millisecond
+)
 
 // SanitizeFilename cleans invalid operating system path characters.
 func SanitizeFilename(name string) string {
@@ -329,7 +333,7 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 
 		if isAgent {
 			// Agent mode: preserve standard machine-readable output format
-			cmd := cmdutil.NewCommand(ctx, "fetch-track", baseArgs...)
+			cmd := cmdutil.NewCommand(ctx, fetchTrackCmdName, baseArgs...)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			cmdErr = cmd.Run()
@@ -375,7 +379,7 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 				args = append(args, "--progress-target", sockTarget)
 			}
 
-			cmd := cmdutil.NewCommand(ctx, "fetch-track", args...)
+			cmd := cmdutil.NewCommand(ctx, fetchTrackCmdName, args...)
 			if opts.Verbose || sockServer == nil {
 				cmd.Stdout = os.Stdout
 				cmd.Stderr = os.Stderr
@@ -472,8 +476,8 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 			}
 		}
 
-		if i < totalTracks-1 {
-			delay := time.Duration(1000+rand.Intn(1500)) * time.Millisecond
+		if i < totalTracks-1 && trackDownloadDelay > 0 {
+			delay := trackDownloadDelay + time.Duration(rand.Intn(1500))*time.Millisecond
 			select {
 			case <-ctx.Done():
 				return ctx.Err()

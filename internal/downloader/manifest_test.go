@@ -71,10 +71,36 @@ func TestDetectNewFile(t *testing.T) {
 		t.Errorf("Expected existing.txt in snapshot")
 	}
 
+	// Add sub-directory and playlist.m3u (which should be ignored by DetectNewFile)
+	_ = os.MkdirAll(filepath.Join(tempDir, "subdir"), 0755)
+	_ = os.WriteFile(filepath.Join(tempDir, "playlist.m3u"), []byte("m3u"), 0644)
+	_ = os.WriteFile(filepath.Join(tempDir, "mix_manifest.json"), []byte("{}"), 0644)
+
 	_ = os.WriteFile(filepath.Join(tempDir, "01 - new_track.m4a"), []byte("audio"), 0644)
 
 	newFile := DetectNewFile(tempDir, snapshot)
 	if newFile != "01 - new_track.m4a" {
 		t.Errorf("Expected detected new file '01 - new_track.m4a', got %q", newFile)
+	}
+
+	// Non-existent directory
+	emptySnap := SnapshotFiles(filepath.Join(tempDir, "non_existent"))
+	if len(emptySnap) != 0 {
+		t.Errorf("expected empty snapshot for non-existent dir")
+	}
+}
+
+func TestLoadOrCreateManifest_InvalidJSON(t *testing.T) {
+	tempDir := t.TempDir()
+	manifestFile := filepath.Join(tempDir, "mix_manifest.json")
+	_ = os.WriteFile(manifestFile, []byte("{corrupted json"), 0644)
+
+	tracks := []types.Track{{Artist: "A", Title: "B"}}
+	m, err := LoadOrCreateManifest(tempDir, "Title", tracks, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if m == nil || len(m.Tracks) != 1 {
+		t.Errorf("expected new fallback manifest returned on corrupted read")
 	}
 }

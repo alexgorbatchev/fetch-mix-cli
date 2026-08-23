@@ -9,9 +9,14 @@ import (
 	"strings"
 )
 
+var (
+	selfUpdateBaseURL  = "https://github.com"
+	executablePathFunc = os.Executable
+)
+
 // UpgradeSelf checks for a newer release of fetch-mix and replaces the running binary.
 func UpgradeSelf(ctx context.Context, currentVersion string) (bool, string, error) {
-	exePath, err := os.Executable()
+	exePath, err := executablePathFunc()
 	if err != nil {
 		return false, "", fmt.Errorf("locating current executable: %w", err)
 	}
@@ -21,7 +26,7 @@ func UpgradeSelf(ctx context.Context, currentVersion string) (bool, string, erro
 		return false, "", fmt.Errorf("evaluating executable symlinks %q: %w", exePath, err)
 	}
 
-	return UpgradeSelfWithBaseURL(ctx, "https://github.com", currentVersion, exePath)
+	return UpgradeSelfWithBaseURL(ctx, selfUpdateBaseURL, currentVersion, exePath)
 }
 
 // UpgradeSelfWithBaseURL checks and upgrades the executable at targetExePath using a custom base URL.
@@ -60,7 +65,6 @@ func UpgradeSelfWithBaseURL(ctx context.Context, baseURL, currentVersion, target
 	assetName := fmt.Sprintf("%s_%s_%s_%s.%s", binName, latestVer, osName, archName, ext)
 	assetURL := fmt.Sprintf("%s/%s/%s/releases/download/%s/%s", strings.TrimRight(baseURL, "/"), owner, repo, tag, assetName)
 
-	tmpBinName := fmt.Sprintf(".%s.upgrade.tmp", binName)
 	if err := downloadAndExtractAsset(ctx, assetURL, execName, targetDir, isZip); err != nil {
 		return false, "", fmt.Errorf("downloading and extracting upgrade asset: %w", err)
 	}
@@ -74,8 +78,6 @@ func UpgradeSelfWithBaseURL(ctx context.Context, baseURL, currentVersion, target
 			return false, "", fmt.Errorf("replacing binary at %q: %w", targetExePath, err)
 		}
 	}
-
-	_ = tmpBinName // reserved for temporary rename steps on Windows if needed
 
 	return true, latestVer, nil
 }

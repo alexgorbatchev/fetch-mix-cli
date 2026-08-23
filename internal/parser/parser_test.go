@@ -150,3 +150,39 @@ Tracklist
 		t.Errorf("unexpected track 0: %#v", tracks[0])
 	}
 }
+
+func TestParseTracklistWithAI_Errors(t *testing.T) {
+	ctx := t.Context()
+
+	// Content with no tracks and auto provider (no keys)
+	_, _, err := ParseTracklistWithAI(ctx, "No tracks here", "Title", "auto", "")
+	if err == nil {
+		t.Errorf("expected error when no tracks could be extracted")
+	}
+
+	// Invalid provider with no fallback tracks
+	_, _, err = ParseTracklistWithAI(ctx, "No tracks here", "Title", "invalid-provider-xyz", "")
+	if err == nil {
+		t.Errorf("expected error with invalid provider and no tracks")
+	}
+}
+
+func TestParseTracklist_SkippedItems(t *testing.T) {
+	markdown := `
+Tracklist
+---------
+1. Intro - Welcome
+2. Artist 1 - Track 1
+3. Outro - Goodbye
+4. ID - ID
+5. Untitled - Untitled
+6. Some Artist - 
+`
+	tracks, skipped := ParseTracklist(markdown)
+	if len(tracks) != 1 {
+		t.Errorf("expected 1 track, got %d", len(tracks))
+	}
+	if len(skipped) < 4 {
+		t.Errorf("expected at least 4 skipped items, got %d", len(skipped))
+	}
+}

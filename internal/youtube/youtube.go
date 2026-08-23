@@ -42,9 +42,10 @@ type CachedYouTubeTracks struct {
 }
 
 var (
-	rxVideoID = regexp.MustCompile(`(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/|shorts\/)([^"&?\/\s]{11})`)
-	rxDashes  = regexp.MustCompile(`[\-\x{2012}\x{2013}\x{2014}\x{2015}:]`)
-	rxDigits  = regexp.MustCompile(`\d`)
+	rxVideoID    = regexp.MustCompile(`(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/|shorts\/)([^"&?\/\s]{11})`)
+	rxDashes     = regexp.MustCompile(`[\-\x{2012}\x{2013}\x{2014}\x{2015}:]`)
+	rxDigits     = regexp.MustCompile(`\d`)
+	ytdlpCmdName = "yt-dlp"
 )
 
 // ExtractVideoID extracts the 11-character YouTube video ID from a URL or raw ID.
@@ -142,7 +143,7 @@ func FetchVideoComments(ctx context.Context, videoURL string, noCache bool) (*yo
 		videoURL,
 	}
 
-	cmd := cmdutil.NewCommand(ctx, "yt-dlp", args...)
+	cmd := cmdutil.NewCommand(ctx, ytdlpCmdName, args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
