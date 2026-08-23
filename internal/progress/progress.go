@@ -59,14 +59,14 @@ type ResultInfo struct {
 
 // TrackInfo describes a set-level track item.
 type TrackInfo struct {
-	Index        int     `json:"index"`
-	TotalTracks  int     `json:"total_tracks"`
-	Artist       string  `json:"artist"`
-	Title        string  `json:"title"`
-	Timestamp    string  `json:"timestamp,omitempty"`
-	ActualFile   string  `json:"actual_file,omitempty"`
-	Status       string  `json:"status,omitempty"`
-	ErrorMessage string  `json:"error,omitempty"`
+	Index        int    `json:"index"`
+	TotalTracks  int    `json:"total_tracks"`
+	Artist       string `json:"artist"`
+	Title        string `json:"title"`
+	Timestamp    string `json:"timestamp,omitempty"`
+	ActualFile   string `json:"actual_file,omitempty"`
+	Status       string `json:"status,omitempty"`
+	ErrorMessage string `json:"error,omitempty"`
 }
 
 // Event represents an atomic structured telemetry/progress update sent over the socket.

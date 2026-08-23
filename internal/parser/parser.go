@@ -15,7 +15,7 @@ var (
 	rxBrackets         = regexp.MustCompile(`\\?[\[{].*?\\?[\]}]`)
 	rxPrefixLabel      = regexp.MustCompile(`(?i)^(?:intro\s*:\s*|outro\s*:\s*|track\s*\d+\s*:\s*)`)
 	rxTrailingPlay     = regexp.MustCompile(`▶\s*\d{1,2}:\d{2}\s*$`)
-	rxLeadingTimestamp  = regexp.MustCompile(`(?i)^(?:\d{1,2}:\d{2}(?::\d{2})?|\[\d{1,2}:\d{2}\])\s*`)
+	rxLeadingTimestamp = regexp.MustCompile(`(?i)^(?:\d{1,2}:\d{2}(?::\d{2})?|\[\d{1,2}:\d{2}\])\s*`)
 	rxListPrefix       = regexp.MustCompile(`^(?:\d+[\.\s\-]+|\*|-)\s+`)
 	rxTrimChars        = regexp.MustCompile(`^[\s_"?*▶•–—\-:]+|[\s_"?*▶•–—\-:]+$`)
 	rxWhitespace       = regexp.MustCompile(`\s+`)

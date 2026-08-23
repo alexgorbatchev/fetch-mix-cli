@@ -53,7 +53,7 @@
 
 `fetch-mix` requires the following external binary dependencies installed on your system `$PATH`:
 
-- [`fetch-track`](https://github.com/alexgorbatchev/fetch-track-cli) (version 0.1.0 or newer) — for single-track acquisition
+- [`fetch-track`](https://github.com/alexgorbatchev/fetch-track-cli) (version 1.0.0 or newer) — for single-track acquisition
 - [`yt-dlp`](https://github.com/yt-dlp/yt-dlp#installation) (version 2024.08.01 or newer) — for YouTube comment extraction
 - [`ffmpeg`](https://ffmpeg.org/download.html) (version 4.4 or newer) — for audio processing
 - [`firecrawl`](https://github.com/alexgorbatchev/firecrawl-cli) (version 1.0.0 or newer) — for web search and tracklist page scraping
@@ -175,7 +175,7 @@ fetch-mix dependencies
 
 Sample Output:
 ```
-fetch-track: 1.0.0 (min 0.1.0) [OK]
+fetch-track: 1.3.0 (min 1.0.0) [OK]
 yt-dlp: 2026.07.04 (min 2024.08.01) [OK]
 ffmpeg: 8.1.2 (min 4.4) [OK]
 firecrawl: 1.0.0 (min 1.0.0) [OK]
@@ -194,6 +194,8 @@ All required dependencies are installed and operational.
 | `--llm-model` | `-m` | | LLM model name override (e.g. `gpt-4o-mini`, `claude-3-5-haiku-latest`, `llama3.2`) |
 | `--sources` | `-s` | `youtube,soundcloud` | Comma-separated search sources passed to `fetch-track` |
 | `--interactive` | `-i` | `false` | Interactively choose set search result |
+| `--progress-target` | | `""` | Target URI for streaming NDJSON progress events (`unix:///path.sock`, `tcp://127.0.0.1:9099`, `fd://3`, `stdout`, `stderr`) |
+| `--progress-socket` | | `""` | Shorthand alias for `--progress-target` |
 | `--skip-verify` | | `false` | Skip audio quality spectrum check in `fetch-track` |
 | `--skip-metadata` | | `false` | Skip cover art and metadata tagging in `fetch-track` |
 | `--verbose` | `-v` | `false` | Show extra detailed progress logs |

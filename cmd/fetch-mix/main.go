@@ -27,13 +27,13 @@ import (
 var (
 	version = "dev"
 
-	outDir       string
-	dryRun       bool
-	noCache      bool
-	sourcesFlag  string
-	skipVerify   bool
-	skipMetadata bool
-	interactive  bool
+	outDir         string
+	dryRun         bool
+	noCache        bool
+	sourcesFlag    string
+	skipVerify     bool
+	skipMetadata   bool
+	interactive    bool
 	verbose        bool
 	llmProvider    string
 	llmModel       string
