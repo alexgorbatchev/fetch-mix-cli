@@ -370,10 +370,14 @@ func ensureDependencies(ctx context.Context) error {
 
 	if !deps.IsAgentMode() {
 		reader := bufio.NewReader(os.Stdin)
-		fmt.Printf("\nMissing or outdated dependencies: %s\nWould you like to auto-install them to managed directory? [Y/n]: ", strings.Join(unsatisfied, ", "))
-		ans, _ := reader.ReadString('\n')
+		fmt.Printf("\nMissing or outdated dependencies: %s\nWould you like to auto-install them to managed directory? [y/N]: ", strings.Join(unsatisfied, ", "))
+		ans, readErr := reader.ReadString('\n')
+		if readErr != nil && len(ans) == 0 {
+			// EOF or closed stdin without user input - do not auto-install
+			return err
+		}
 		ans = strings.TrimSpace(strings.ToLower(ans))
-		if ans == "" || ans == "y" || ans == "yes" {
+		if ans == "y" || ans == "yes" {
 			fmt.Printf("Installing dependencies: %s...\n", strings.Join(unsatisfied, ", "))
 			installed, installErr := deps.InstallMissingDependencies(ctx)
 			if installErr != nil {

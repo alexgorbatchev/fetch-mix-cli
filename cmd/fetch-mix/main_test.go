@@ -431,12 +431,31 @@ func TestEnsureDependencies_Direct(t *testing.T) {
 
 	_ = ensureDependencies(canceledCtx)
 
-	// 6. Missing dependencies in interactive mode pressing Enter (default Yes)
+	// 6. Missing dependencies in interactive mode pressing Enter (default No)
 	r3, w3, _ := os.Pipe()
 	_, _ = fmt.Fprintln(w3, "")
 	_ = w3.Close()
 	os.Stdin = r3
-	_ = ensureDependencies(canceledCtx)
+	if err := ensureDependencies(canceledCtx); err == nil {
+		t.Errorf("expected error when pressing Enter (default No) to install prompt")
+	}
+
+	// 7. Missing dependencies in interactive mode answering "n" (Rejection)
+	r4, w4, _ := os.Pipe()
+	_, _ = fmt.Fprintln(w4, "n")
+	_ = w4.Close()
+	os.Stdin = r4
+	if err := ensureDependencies(canceledCtx); err == nil {
+		t.Errorf("expected error when answering 'n' to install prompt")
+	}
+
+	// 8. Missing dependencies with closed stdin / EOF (Rejection)
+	r5, w5, _ := os.Pipe()
+	_ = w5.Close()
+	os.Stdin = r5
+	if err := ensureDependencies(canceledCtx); err == nil {
+		t.Errorf("expected error when stdin reaches EOF on install prompt")
+	}
 }
 
 func TestEnsureDependencies_FormattedOutput(t *testing.T) {
@@ -481,8 +500,8 @@ func TestEnsureDependencies_FormattedOutput(t *testing.T) {
 	if !strings.Contains(output, "fetch-track (installed 1.0.0, required >= 1.4.0)") {
 		t.Errorf("output missing expected installed/required version details, got:\n%s", output)
 	}
-	if !strings.Contains(output, "Missing or outdated dependencies:") {
-		t.Errorf("output missing expected prompt header, got:\n%s", output)
+	if !strings.Contains(output, "Would you like to auto-install them to managed directory? [y/N]:") {
+		t.Errorf("output missing expected [y/N] prompt, got:\n%s", output)
 	}
 }
 
