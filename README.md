@@ -139,6 +139,7 @@ Sample Output:
 Supported LLM Providers & Models:
 ==================================================
 PROVIDER       DEFAULT MODEL              ENV VAR              STATUS
+--------------------------------------------------
 ollama         llama3.2                   OLLAMA_HOST          Not Set (default: http://localhost:11434)
 litellm        gemini-2.5-flash           LITELLM_BASE_URL     Active
 gemini         gemini-2.5-flash           GEMINI_API_KEY       Active

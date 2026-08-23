@@ -7,7 +7,7 @@ bin/
 *.dylib
 *.test
 *.out
-fetch-mix
+/fetch-mix
 
 # Local temporary cache & downloads
 .tmp/
