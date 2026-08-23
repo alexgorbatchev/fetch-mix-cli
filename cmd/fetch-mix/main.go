@@ -39,6 +39,7 @@ var (
 	llmModel       string
 	progressTarget string
 	progressSocket string
+	autoInstall    bool
 )
 
 func main() {
@@ -101,6 +102,7 @@ parses tracklists deterministically, and downloads individual tracks using fetch
 	rootCmd.Flags().StringVarP(&llmModel, "llm-model", "m", "", "LLM model name override")
 	rootCmd.Flags().StringVar(&progressTarget, "progress-target", "", "Target URI/address for streaming JSON progress events (e.g. unix:///path/to.sock, tcp://127.0.0.1:9099, fd://3, stdout, stderr)")
 	rootCmd.Flags().StringVar(&progressSocket, "progress-socket", "", "Shorthand alias for --progress-target")
+	rootCmd.Flags().BoolVar(&autoInstall, "auto-install", false, "Automatically install missing dependencies without prompting")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose log output")
 
 	youtubeCmd := &cobra.Command{
@@ -136,6 +138,7 @@ parses tracklists deterministically, and downloads individual tracks using fetch
 	youtubeCmd.Flags().StringVarP(&llmModel, "llm-model", "m", "", "LLM model name override")
 	youtubeCmd.Flags().StringVar(&progressTarget, "progress-target", "", "Target URI/address for streaming JSON progress events (e.g. unix:///path/to.sock, tcp://127.0.0.1:9099, fd://3, stdout, stderr)")
 	youtubeCmd.Flags().StringVar(&progressSocket, "progress-socket", "", "Shorthand alias for --progress-target")
+	youtubeCmd.Flags().BoolVar(&autoInstall, "auto-install", false, "Automatically install missing dependencies without prompting")
 
 	aiCmd := &cobra.Command{
 		Use:          "ai",
@@ -213,9 +216,93 @@ parses tracklists deterministically, and downloads individual tracks using fetch
 		},
 	}
 
+	depsInstallCmd := &cobra.Command{
+		Use:          "install [dependency...]",
+		Aliases:      []string{"add", "get"},
+		Short:        "Install missing external dependencies (fetch-track, firecrawl, yt-dlp, ffmpeg)",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_ = deps.InitManagedPath()
+			if len(args) > 0 {
+				for _, depName := range args {
+					fmt.Printf("Installing %s...\n", depName)
+					if err := deps.InstallDependency(cmd.Context(), depName); err != nil {
+						return fmt.Errorf("installing %s: %w", depName, err)
+					}
+					fmt.Printf("✓ %s installed successfully.\n", depName)
+				}
+				return nil
+			}
+
+			fmt.Println("Checking and installing missing dependencies...")
+			installed, err := deps.InstallMissingDependencies(cmd.Context())
+			if err != nil {
+				return err
+			}
+			if len(installed) == 0 {
+				fmt.Println("All dependencies are already satisfied.")
+			} else {
+				fmt.Printf("Successfully installed: %s\n", strings.Join(installed, ", "))
+			}
+			return nil
+		},
+	}
+
+	depsUpdateCmd := &cobra.Command{
+		Use:          "update [dependency...]",
+		Aliases:      []string{"upgrade"},
+		Short:        "Update external dependencies to their latest versions",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_ = deps.InitManagedPath()
+			if len(args) > 0 {
+				for _, depName := range args {
+					fmt.Printf("Updating %s...\n", depName)
+					if err := deps.UpdateDependency(cmd.Context(), depName); err != nil {
+						return fmt.Errorf("updating %s: %w", depName, err)
+					}
+					fmt.Printf("✓ %s updated successfully.\n", depName)
+				}
+				return nil
+			}
+
+			fmt.Println("Updating all dependencies to latest versions...")
+			updated, err := deps.UpdateAllDependencies(cmd.Context())
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Successfully updated: %s\n", strings.Join(updated, ", "))
+			return nil
+		},
+	}
+
+	depsCmd.AddCommand(depsInstallCmd)
+	depsCmd.AddCommand(depsUpdateCmd)
+
+	upgradeCmd := &cobra.Command{
+		Use:          "upgrade",
+		Aliases:      []string{"self-update", "update-self"},
+		Short:        "Upgrade fetch-mix CLI binary to the latest released version",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Printf("Checking for newer fetch-mix release (current version: %s)...\n", version)
+			updated, latestVer, err := deps.UpgradeSelf(cmd.Context(), version)
+			if err != nil {
+				return fmt.Errorf("upgrade failed: %w", err)
+			}
+			if !updated {
+				fmt.Printf("fetch-mix is already up to date (version %s).\n", latestVer)
+				return nil
+			}
+			fmt.Printf("✓ Successfully upgraded fetch-mix to version %s!\n", latestVer)
+			return nil
+		},
+	}
+
 	rootCmd.AddCommand(youtubeCmd)
 	rootCmd.AddCommand(aiCmd)
 	rootCmd.AddCommand(depsCmd)
+	rootCmd.AddCommand(upgradeCmd)
 
 	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		if ctx.Err() != nil {
@@ -240,7 +327,60 @@ func resolveProgressReporter(ctx context.Context) (*progress.Reporter, error) {
 	return progress.NewReporter(ctx, targetURI)
 }
 
+func ensureDependencies(ctx context.Context) error {
+	_ = deps.InitManagedPath()
+	reports, err := deps.VerifyDependencies(ctx)
+	if err == nil {
+		return nil
+	}
+
+	var missing []string
+	for _, r := range reports {
+		if !r.Satisfied {
+			missing = append(missing, r.Name)
+		}
+	}
+
+	if autoInstall {
+		fmt.Printf("Auto-installing missing dependencies: %s...\n", strings.Join(missing, ", "))
+		installed, installErr := deps.InstallMissingDependencies(ctx)
+		if installErr != nil {
+			return fmt.Errorf("auto-installing dependencies: %w", installErr)
+		}
+		if len(installed) > 0 {
+			fmt.Printf("✓ Successfully installed: %s\n", strings.Join(installed, ", "))
+		}
+		return nil
+	}
+
+	if !deps.IsAgentMode() {
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Printf("\nMissing required dependencies: %s\nWould you like to auto-install them to managed directory? [Y/n]: ", strings.Join(missing, ", "))
+		ans, _ := reader.ReadString('\n')
+		ans = strings.TrimSpace(strings.ToLower(ans))
+		if ans == "" || ans == "y" || ans == "yes" {
+			fmt.Printf("Installing dependencies: %s...\n", strings.Join(missing, ", "))
+			installed, installErr := deps.InstallMissingDependencies(ctx)
+			if installErr != nil {
+				return fmt.Errorf("auto-installing dependencies: %w", installErr)
+			}
+			if len(installed) > 0 {
+				fmt.Printf("✓ Successfully installed: %s\n\n", strings.Join(installed, ", "))
+			}
+			return nil
+		}
+	}
+
+	return err
+}
+
 func runMixPipeline(ctx context.Context, query string) error {
+	if !dryRun {
+		if err := ensureDependencies(ctx); err != nil {
+			return err
+		}
+	}
+
 	var chosenSet types.SearchResult
 
 	isDirectCrawlable := (strings.HasPrefix(query, "http://") || strings.HasPrefix(query, "https://")) &&
@@ -349,6 +489,12 @@ func runMixPipeline(ctx context.Context, query string) error {
 }
 
 func runYouTubePipeline(ctx context.Context, videoURL string) error {
+	if !dryRun {
+		if err := ensureDependencies(ctx); err != nil {
+			return err
+		}
+	}
+
 	fmt.Printf("Processing YouTube video tracklist comments: %s...\n", videoURL)
 	tracks, skippedItems, videoTitle, err := youtube.ProcessYouTubeComments(ctx, videoURL, noCache, llmProvider, llmModel)
 	if err != nil {
