@@ -9,8 +9,8 @@ Operational guidelines, architecture, and developer interface specs for AI agent
 `fetch-mix` is a Go CLI application that searches, extracts, and downloads entire tracklists for DJ sets and mixes. It serves as a set-level orchestrator complementary to [`fetch-track`](https://github.com/alexgorbatchev/fetch-track-cli) (which handles single-track audio acquisition, spectral bandwidth verification, and artwork tagging).
 
 ### Core Responsibilities
-- **Tracklist Search & Discovery**: Queries MixesDB and unblocked web mirrors (Brizm, OpeningTrack, Thomas Laupstad, Tracklist.club) via `firecrawl`. Accepts 1001tracklists URLs by extracting set slugs and discovering mirrors.
-- **Multi-Provider LLM Integration**: Uses `github.com/zendev-sh/goai` to extract tracklists from comments across 25+ LLM providers (Ollama 1st priority, LiteLLM 2nd, Google Gemini 3rd, OpenAI 4th, Anthropic Claude, OpenRouter, DeepSeek, Groq, and custom OpenAI-compatible endpoints).
+- **Tracklist Search & Discovery**: Native HTTP queries to MixesDB (MediaWiki Search API) and unblocked web mirrors (OpeningTrack, Tracklist.club) via WordPress REST APIs. Accepts 1001tracklists URLs by extracting set slugs and discovering mirrors.
+- **Multi-Provider LLM Integration**: Uses `github.com/zendev-sh/goai` to extract tracklists from comments and web sets across 25+ LLM providers (Ollama 1st priority, LiteLLM 2nd, Google Gemini 3rd, OpenAI 4th, Anthropic Claude, OpenRouter, DeepSeek, Groq, and custom OpenAI-compatible endpoints) with deterministic regex fallback.
 - **Intermediary Manifest & Resumable Downloads**: Saves a JSON manifest (`{mix-title}/mix_manifest.json`) tracking download status per track and mapping track indices to actual saved file names on disk. Automatically resumes interrupted downloads.
 - **Default Output Layout**: Downloads tracks into `cwd/{mix-title-from-youtube}/01 - Artist - Title.m4a` by default unless `--out-dir` / `-o` is provided.
 - **Dry-Run Preview (`--dry-run`)**: Parses tracklists and previews planned track output paths, filenames, and `.m3u` playlist structure without performing network downloads or writing files.
@@ -25,22 +25,24 @@ fetch-mix-cli/
 ├── cmd/
 │   └── fetch-mix/          # Cobra CLI entry point, flag parsing, command routing
 └── internal/
-    ├── cache/              # File-based JSON caching in .tmp/ for YouTube comment dumps
-    ├── deps/               # Verification of external dependencies (fetch-track, yt-dlp, ffmpeg, firecrawl)
+    ├── cache/              # File-based JSON caching in .tmp/ or XDG cache
+    ├── deps/               # Verification & auto-install of external dependencies (fetch-track, yt-dlp, ffmpeg)
     ├── downloader/         # Sequential download execution & .m3u playlist generation
-    ├── parser/             # Deterministic markdown tracklist parser (MixesDB, Brizm, OpeningTrack)
+    ├── llm/                # Multi-provider LLM integration via goai (Ollama, LiteLLM, Gemini, OpenAI, etc.)
+    ├── parser/             # LLM-driven tracklist extraction with deterministic regex fallback
     ├── progress/           # Socket progress listener & NDJSON streaming telemetry
-    ├── scraper/            # Firecrawl page scraping wrapper
-    ├── search/             # MixesDB & general web tracklist search wrapper
-    ├── types/              # Domain models (Track, SearchResult, ScrapedSet)
-    └── youtube/            # YouTube comment fetching, candidate pre-filtering, Gemini 2.5 Flash API client
+    ├── scraper/            # Native HTTP fetching & HTML-to-Markdown / Wikitext extraction
+    ├── search/             # Native MixesDB MediaWiki & WordPress REST API search
+    ├── types/              # Domain models (Track, SearchResult, ScrapedSet, SkippedItem)
+    └── youtube/            # YouTube comment fetching, candidate pre-filtering, LLM extraction
 ```
 
 ### Package Contracts
-- **`parser.ParseTracklist(markdown string) []types.Track`**: Pure function. Strips markdown links, timestamps, list numbers, brackets, and filters out placeholders (`ID - ID`, `Untitled`).
-- **`search.SearchSet(ctx, query) ([]types.SearchResult, error)`**: Searches MixesDB first; falls back to general crawlable web mirrors.
-- **`scraper.ScrapeSet(ctx, url) (string, error)`**: Scrapes target URL using `firecrawl scrape --json`.
-- **`youtube.ProcessYouTubeComments(ctx, url) ([]types.Track, string, error)`**: Fetches comments, uses local cache in `.tmp/`, pre-filters candidates, calls Gemini 2.5 Flash API, returns tracks and video title.
+- **`parser.ParseTracklist(markdown string) ([]types.Track, []types.SkippedItem)`**: Deterministic pure function fallback.
+- **`parser.ParseTracklistWithAI(ctx, content, title, provider, model) ([]types.Track, []types.SkippedItem, error)`**: Uses configured LLM for semantic tracklist extraction, falling back to deterministic parser.
+- **`search.SearchSet(ctx, query) ([]types.SearchResult, error)`**: Searches MixesDB MediaWiki API first; falls back to crawlable web mirrors.
+- **`scraper.ScrapeSet(ctx, url) (string, error)`**: Fetches target URL natively, retrieving raw wikitext for MixesDB or converting HTML to Markdown for general web pages.
+- **`youtube.ProcessYouTubeComments(ctx, url, noCache, provider, model) ([]types.Track, []types.SkippedItem, string, error)`**: Fetches comments, uses local cache in `.tmp/`, pre-filters candidates, calls LLM, returns tracks, skipped items, and video title.
 - **`downloader.DownloadSet(ctx, opts) error`**: Handles sequential downloading via `fetch-track` CLI, handles `--dry-run` preview, and generates `.m3u` playlist.
 
 ---
@@ -52,9 +54,7 @@ The following external binaries must be available in `$PATH`:
 1. **`fetch-track`** (min version `1.0.0`): Single-track downloader pipeline.
 2. **`yt-dlp`** (min version `2024.08.01`): Comment fetcher and YouTube video query engine.
 3. **`ffmpeg`** (min version `4.4`): Audio stream processor.
-4. **`firecrawl`** (min version `1.0.0`): Web scraper and search engine.
-5. **`GEMINI_API_KEY`**: Environment variable required for YouTube comment extraction (`fetch-mix youtube`).
-6. **`AGENT=1`**: Environment variable enabling agent mode (non-interactive auto-selection, structured machine-readable dependency output).
+4. **`AGENT=1`**: Environment variable enabling agent mode (non-interactive auto-selection, structured machine-readable dependency output).
 
 Verify dependency status at any time:
 ```bash

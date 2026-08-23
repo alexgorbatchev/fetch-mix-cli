@@ -62,8 +62,7 @@
 - [`fetch-track`](https://github.com/alexgorbatchev/fetch-track-cli) (version 1.0.0 or newer) — for single-track acquisition
 - [`yt-dlp`](https://github.com/yt-dlp/yt-dlp#installation) (version 2024.08.01 or newer) — for YouTube comment extraction
 - [`ffmpeg`](https://ffmpeg.org/download.html) (version 4.4 or newer) — for audio processing
-- [`firecrawl`](https://github.com/alexgorbatchev/firecrawl-cli) (version 1.0.0 or newer) — for web search and tracklist page scraping
-- **Gemini API Key** (`GEMINI_API_KEY`) — required for YouTube comments extraction (`fetch-mix youtube`)
+- **LLM API Key / Endpoint** (optional, e.g. `GEMINI_API_KEY`, `OPENAI_API_KEY`, `OLLAMA_HOST`, etc.) — for LLM-driven tracklist extraction (`fetch-mix ai` for details)
 
 ## Installation
 
@@ -173,7 +172,7 @@ fetch-mix -o "my_sets/bicep" "Bicep Essential Mix 2014"
 
 ### 5. Managing Dependencies & Auto-Install
 
-Verify, install, or update required external dependencies (`fetch-track`, `yt-dlp`, `ffmpeg`, `firecrawl`):
+Verify, install, or update required external dependencies (`fetch-track`, `yt-dlp`, `ffmpeg`):
 
 ```bash
 # Check status of required dependencies
