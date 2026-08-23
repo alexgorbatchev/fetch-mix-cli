@@ -30,7 +30,7 @@ type Dependency struct {
 var RequiredDependencies = []Dependency{
 	{
 		Name:       "fetch-track",
-		MinVersion: "1.0.0",
+		MinVersion: "1.4.0",
 		InstallURL: "https://github.com/alexgorbatchev/fetch-track-cli",
 	},
 	{
@@ -100,6 +100,10 @@ func VerifyDependencies(ctx context.Context, cacheInst ...*cache.Cache) ([]Depen
 }
 
 func VerifyDependenciesWithRunner(ctx context.Context, runner CommandRunner, c *cache.Cache, deps ...Dependency) ([]DependencyReport, error) {
+	if len(deps) == 0 {
+		deps = RequiredDependencies
+	}
+
 	reports := make([]DependencyReport, len(deps))
 	var mu sync.Mutex
 	var firstErr error
