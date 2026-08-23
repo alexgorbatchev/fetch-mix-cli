@@ -44,7 +44,7 @@ var SupportedProviders = []ProviderInfo{
 }
 
 // GetProviderStatuses checks active environment variables and returns current status for all providers.
-// Active: Selected as default under auto-detection.
+// WILL BE USED: Selected as default under auto-detection.
 // Detected: API key/endpoint present, but lower in auto-detection priority.
 // Not Detected: No API key or endpoint configured.
 func GetProviderStatuses() []ProviderInfo {
@@ -62,7 +62,7 @@ func GetProviderStatuses() []ProviderInfo {
 			if p.Active {
 				if !defaultFound {
 					p.IsDefault = true
-					p.Status = "Active"
+					p.Status = "WILL BE USED"
 					defaultFound = true
 				} else {
 					p.Status = "Detected"
@@ -78,7 +78,7 @@ func GetProviderStatuses() []ProviderInfo {
 			if p.Active {
 				if !defaultFound {
 					p.IsDefault = true
-					p.Status = "Active"
+					p.Status = "WILL BE USED"
 					defaultFound = true
 				} else {
 					p.Status = "Detected"
@@ -91,7 +91,7 @@ func GetProviderStatuses() []ProviderInfo {
 			if p.Active {
 				if !defaultFound {
 					p.IsDefault = true
-					p.Status = "Active"
+					p.Status = "WILL BE USED"
 					defaultFound = true
 				} else {
 					p.Status = "Detected"

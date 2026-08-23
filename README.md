@@ -141,7 +141,7 @@ Supported LLM Providers & Models (auto-detection priority order):
 PROVIDER       DEFAULT MODEL              ENV VAR              STATUS
 --------------------------------------------------
 ollama         llama3.2                   OLLAMA_HOST          Not Detected (default: http://localhost:11434)
-litellm        gemini-2.5-flash           LITELLM_BASE_URL     Active
+litellm        gemini-2.5-flash           LITELLM_BASE_URL     WILL BE USED
 gemini         gemini-2.5-flash           GEMINI_API_KEY       Detected
 openai         gpt-4o-mini                OPENAI_API_KEY       Detected
 anthropic      claude-3-5-haiku-latest    ANTHROPIC_API_KEY    Not Detected
