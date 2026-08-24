@@ -1,222 +1,96 @@
-# fetch-mix
+A command-line tool with AI agent support for bedroom and amateur DJs to find, extract, and download full tracklists from DJ sets, mixes, and YouTube videos.
 
-`fetch-mix` is a command-line tool with AI agent support for bedroom and amateur DJs to find, extract, and download full tracklists from DJ sets, mixes, and YouTube videos.
+# What It Does
 
-> [!IMPORTANT]
-> **Intended Audience & Legal Disclaimer:**  
-> `fetch-mix` is strictly intended for **amateur and bedroom DJs** practicing at home or playing non-commercial sets who are not seeking to become professional DJs. **Working professional DJs and commercial performers must source music from legitimate commercial sources** (such as Beatport, Bandcamp purchases, Juno Download, iTunes, or authorized record pools).
+- Finds full DJ mix tracklists by searching MixesDB and crawlable tracklist web mirrors (OpeningTrack, Tracklist.club, Thomas Laupstad).
+- Extracts tracklists from YouTube video comments using multi-provider LLMs (Ollama, LiteLLM, Google Gemini, OpenAI, Anthropic Claude, OpenRouter, DeepSeek, Groq, custom endpoints) with automatic deterministic fallback.
+- Resolves 1001Tracklists URLs automatically by extracting set slugs and discovering unblocked web mirrors.
+- Generates order-preserving M3U playlists inside the mix output folder keeping the exact chronological track order of the set.
+- Tracks download state with resumable JSON manifests (`mix_manifest.json`) to skip already downloaded tracks when resuming.
+- Integrates with `fetch-track` CLI for single-track audio stream downloading, loudness normalization, spectral inspection, and 1400x1400 cover art tagging.
 
-> [!WARNING]
-> **Why Downloads Take Time (Avoiding Temporary IP Bans):**  
-> Platforms like YouTube and SoundCloud will temporarily block your internet connection if songs are downloaded too quickly or all at once. To protect your connection and prevent download failures, `fetch-mix` downloads songs **one at a time with short pauses in between**. Please allow the download process to finish at its own pace and **avoid running multiple `fetch-mix` downloads simultaneously**.
+# How It Works
 
-## What It Does
+- Searches MixesDB, web mirrors, or YouTube comments for your requested DJ set title or video URL.
+- Extracts and cleans structured tracklists using AI or regex fallback rules.
+- Previews the download plan and directory structure before downloading when using dry-run mode.
+- Downloads individual tracks sequentially with anti-ban pacing delays to prevent rate limits.
+- Generates an M3U playlist file referencing downloaded tracks in chronological set order.
 
-- **Finds Full DJ Mix Tracklists**: Searches [MixesDB](https://www.mixesdb.com) and crawlable tracklist web mirrors (OpeningTrack, Tracklist.club, Thomas Laupstad) for complete DJ set tracklists.
-- **Extracts Tracklists from YouTube Comments**: Retrieves video comments via `yt-dlp` and uses multi-provider LLMs (Ollama, LiteLLM, Google Gemini, OpenAI, Anthropic Claude, OpenRouter, DeepSeek, Groq, custom endpoints via `goai`) to extract and clean full set tracklists.
-- **1001Tracklists URL Intelligence**: Resolves `1001tracklists.com` URLs automatically by extracting set slugs and discovering unblocked web mirrors.
-- **Generates Order-Preserving M3U Playlists**: Creates a `playlist.m3u` file inside the mix output folder keeping the exact chronological track order of the set.
-- **Resumable Downloads & Tracking**: Maintains a `mix_manifest.json` file inside the mix folder mapping track titles to actual downloaded file names and resuming interrupted downloads without re-downloading existing tracks.
-- **Delegates Single Tracks to `fetch-track`**: Uses `fetch-track` CLI under the hood for audio stream downloading, loudness normalization, spectral inspection, and 1400x1400 cover art tagging.
+# How it Really Works
 
-## How It Works
+- Interrogates direct tracklist URLs directly or extracts slugs from 1001tracklists URLs to locate crawlable mirror pages.
+- Scrapes web mirrors via MediaWiki APIs or HTML-to-Markdown pipelines and extracts structured artist/title pairs.
+- Fetches top YouTube comments using `yt-dlp --no-playlist`, filters candidate comments with separator density heuristics, and parses tracklists via structured LLM schemas.
+- Paces single-track downloads sequentially with randomized delays (1.0–2.5s) to prevent IP rate limits on streaming platforms.
+- Normalizes timestamp formats across the entire mix (automatically padding to `[hh:mm:ss]` if any track exceeds one hour).
+- Writes atomic state entries to `mix_manifest.json` on disk to ensure interrupted mix downloads resume seamlessly without re-downloading.
+- Generates `playlist.m3u` using sanitized local file names matching the exact set sequence.
 
-1. **Search**: Searches MixesDB, web mirrors, or YouTube comments for requested DJ set or video URL.
-2. **Extract**: Extracts structured tracklists via multi-provider LLMs (Ollama, LiteLLM, Gemini, OpenAI, Anthropic Claude, etc.) with automatic deterministic regex fallback.
-3. **Plan**: Organizes tracks sequentially and previews filenames and target directories in `--dry-run` mode.
-4. **Download**: Calls `fetch-track` CLI sequentially for each track in the mix.
-5. **Playlist & Manifest**: Updates `mix_manifest.json` with actual saved file paths and builds `playlist.m3u`.
+# Prerequisites
 
-## How It Really Works
+- [`fetch-track`](https://github.com/alexgorbatchev/fetch-track-cli) (version 1.4.0 or newer) - Single-track acquisition engine.
+- [`yt-dlp`](https://github.com/yt-dlp/yt-dlp#installation) (version 2024.08.01 or newer) - YouTube comment and metadata extractor.
+- [`ffmpeg`](https://ffmpeg.org/download.html) (version 4.4 or newer) - Audio stream processing and transcoding.
+- [GitHub CLI (`gh`)](https://cli.github.com/) - Recommended for downloading release binaries.
 
-### 1. DJ Set Tracklist Search & Web Scraping
+# Installation
 
-- **Direct Tracklist URLs**: If given a direct link to a supported tracklist site (MixesDB, OpeningTrack, Tracklist.club, Thomas Laupstad), `fetch-mix` skips search and immediately scrapes the target page.
-- **1001Tracklists URLs**: `fetch-mix` detects 1001tracklists links, extracts the set title slug from the URL path (for example, turning `polo-and-pan-cercle-2018.html` into `"polo and pan cercle 2018"`), and searches the web for unblocked mirror pages.
-- **Hierarchical Web Search**: `fetch-mix` first queries MixesDB via its MediaWiki Search API. If MixesDB has a matching set page, it selects that page; if MixesDB has no record, it queries WordPress REST APIs across unblocked mirrors (OpeningTrack, Tracklist.club).
-- **Native Scraping & Multi-Provider LLM Extraction with Deterministic Fallback**: Target web pages are scraped natively (retrieving raw wikitext for MixesDB or converting HTML to Markdown for mirrors) and processed by `ParseTracklistWithAI`:
-  - **AI-Powered Extraction**: Submits the tracklist content and set title to the active LLM provider (Ollama, LiteLLM, Gemini, OpenAI, Claude, OpenRouter, DeepSeek, Groq, or custom endpoints) using structured schema output.
-  - **Deterministic Pure Regex Fallback**: When offline or if LLM extraction is unavailable, the deterministic parser processes the document line by line:
-    - Locates the "Tracklist" section while ignoring surrounding noise (related mixes, comments, footers).
-    - Strips timestamps, play buttons, list numbers/bullets, record label brackets, and Markdown hyperlinks.
-    - Normalizes whitespace and dash separators (hyphens, en-dashes, em-dashes).
-    - Splits each line into `Artist` and `Title`.
-    - Filters out placeholder entries (like `ID - ID` or `Untitled`) and records them in a skipped items summary.
-
-### 2. YouTube Comment Tracklist AI Extraction
-
-- **YouTube Video Route**: Passing a YouTube video URL or 11-character video ID automatically routes execution to the YouTube comment extraction engine.
-- **Fetching & Caching Comments**: `fetch-mix` retrieves top comments (up to 500) from YouTube using `yt-dlp` with single-video flags (`--no-playlist`) to ensure quick response times without downloading multi-video playlists. Retrieved comments and extracted tracklists are cached on disk so subsequent runs on the same video ID load instantly.
-- **Local Candidate Pre-Filtering**: Before sending data to AI models, a local scanner screens all retrieved comments to filter out 99% of chatter and spam. It selects comments with at least 3 lines, high density of dash/colon separators, and multiple digits. Candidate comments are sorted by vote count.
-- **Structured LLM Extraction**: Candidate comments are submitted to the configured LLM provider (Ollama, LiteLLM, Google Gemini, OpenAI, Anthropic Claude, OpenRouter, DeepSeek, Groq, or custom endpoints) using a strict JSON output schema. The AI identifies the single comment containing the complete DJ set tracklist and returns structured track items (`artist`, `title`, `timestamp`). It also identifies non-track items (speech timestamps like "Thanks speech", chatter, or incomplete entries missing artist names) so they can be logged separately as skipped items.
-
-### 3. Track Formatting & Download Execution
-
-- **Pacing & Anti-Ban Protection**: Single-track downloads run one at a time with short, randomized pauses between songs. This intentional pacing prevents platforms like YouTube and SoundCloud from temporarily blocking your internet connection or failing downloads on large sets. Avoid running multiple `fetch-mix` commands at the same time to prevent triggering rate limits.
-- **Timestamp Normalization**: If any track in the mix exceeds 1 hour in duration, all timestamps across the mix are padded to 8-character `[hh:mm:ss]` format (e.g. `[00:55:39]` through `[01:06:30]`). If under 1 hour, timestamps remain in 5-character `[mm:ss]` format.
-- **Resumable Manifest & Output Directory**: Tracks are saved into `cwd/{mix-title-from-youtube}`. A tracking manifest file (`mix_manifest.json`) is maintained inside the mix folder to map each track title to its actual saved file name on disk and track completion status (`pending`, `completed`, `failed`). If a download is interrupted, re-running the command reads the manifest, skips already completed tracks, and resumes from where it stopped.
-- **M3U Playlist Generation**: After single-track downloads complete via `fetch-track`, a `playlist.m3u` file is generated inside the mix folder containing the exact saved filenames in the chronological order of the mix.
-
-## Prerequisites
-
-`fetch-mix` requires the following external binary dependencies installed on your system `$PATH`:
-
-- [`fetch-track`](https://github.com/alexgorbatchev/fetch-track-cli) (version 1.4.0 or newer) — for single-track acquisition
-- [`yt-dlp`](https://github.com/yt-dlp/yt-dlp#installation) (version 2024.08.01 or newer) — for YouTube comment extraction
-- [`ffmpeg`](https://ffmpeg.org/download.html) (version 4.4 or newer) — for audio processing
-- **LLM API Key / Endpoint** (optional, e.g. `GEMINI_API_KEY`, `OPENAI_API_KEY`, `OLLAMA_HOST`, etc.) — for LLM-driven tracklist extraction (`fetch-mix ai` for details)
-
-## Installation
-
-Go to the [Latest Release Page](https://github.com/alexgorbatchev/fetch-mix-cli/releases/latest) and download the pre-compiled archive for your operating system.
-
-### Build from Source
+Download the latest prebuilt binary from GitHub Releases:
 
 ```bash
-git clone https://github.com/alexgorbatchev/fetch-mix-cli.git
-cd fetch-mix-cli
-just build
+# Using GitHub CLI
+gh release download --repo alexgorbatchev/fetch-mix-cli --pattern 'fetch-mix-darwin-arm64' --output fetch-mix
+chmod +x fetch-mix
+mv fetch-mix ~/.local/bin/
 ```
-The compiled binary will be placed in `bin/fetch-mix`.
 
-## Quick Start
-
-### 1. Download a DJ Set Tracklist
+Or via direct download:
 
 ```bash
+curl -sSL https://github.com/alexgorbatchev/fetch-mix-cli/releases/latest/download/fetch-mix-darwin-arm64 -o ~/.local/bin/fetch-mix
+chmod +x ~/.local/bin/fetch-mix
+```
+
+# Quick Start
+
+```bash
+# Download a full DJ mix by title
 fetch-mix "Bicep Essential Mix 2014"
-```
 
-### 2. Preview Downloads with `--dry-run`
-
-```bash
+# Preview download plan without downloading files
 fetch-mix --dry-run "https://www.youtube.com/watch?v=NeH3RpyocNc"
-```
 
-Sample Output:
-```
-Processing YouTube video tracklist comments: https://www.youtube.com/watch?v=NeH3RpyocNc...
-Found cached tracklist on disk for YouTube video ID "NeH3RpyocNc"
-
-==================================================
-DRY RUN PREVIEW - No files will be downloaded
-==================================================
-Target Directory  : BORIS REDWALL - СТАНЦИЯ МЕТРО ГОРЬКОВСКАЯ - LA GRANDE FINALE 2025/
-Playlist File     : BORIS REDWALL - СТАНЦИЯ МЕТРО ГОРЬКОВСКАЯ - LA GRANDE FINALE 2025/playlist.m3u
-Manifest File     : BORIS REDWALL - СТАНЦИЯ МЕТРО ГОРЬКОВСКАЯ - LA GRANDE FINALE 2025/mix_manifest.json
-Total Tracks      : 32
-Sources           : youtube,soundcloud
-
-Planned Track Downloads:
-  [00:00:30] 01 - BORIS REDWALL - Motor
-  [00:01:42] 02 - HELLOVERCAVI, SODA LUV - СВАГА
-  [00:03:50] 03 - Boris Redwall - Rude Boy
-  [00:04:40] 04 - Whitney Houston - I Wanna Dance With Somebody
-  ...
-  [01:06:30] 32 - AFELIA - Прости (Sorry)
-
-==================================================
-Playlist file preview: BORIS REDWALL - СТАНЦИЯ МЕТРО ГОРЬКОВСКАЯ - LA GRANDE FINALE 2025/playlist.m3u (32 tracks in mix order)
-[DRY RUN COMPLETE] Plan verified. No downloads performed.
-==================================================
-```
-
-### 3. Extract Tracks from YouTube Comments
-
-```bash
-# Auto-detects active LLM provider (GEMINI_API_KEY / OPENAI_API_KEY / etc.)
+# Extract tracklist from YouTube comments via LLM
 fetch-mix youtube "https://www.youtube.com/watch?v=NeH3RpyocNc"
 
-# Specify explicit LLM provider and model
-fetch-mix youtube -p openai -m gpt-4o-mini "https://www.youtube.com/watch?v=NeH3RpyocNc"
-fetch-mix youtube -p anthropic -m claude-3-5-haiku-latest "https://www.youtube.com/watch?v=NeH3RpyocNc"
-fetch-mix youtube -p ollama -m llama3.2 "https://www.youtube.com/watch?v=NeH3RpyocNc"
-```
-
-### 4. Inspect Supported AI Providers and Models
-
-```bash
+# Inspect supported AI providers and models
 fetch-mix ai
-```
 
-Sample Output:
-```
-==================================================
-Supported LLM Providers & Models (auto-detection priority order):
-==================================================
-PROVIDER       DEFAULT MODEL              ENV VAR              STATUS
---------------------------------------------------
-ollama         llama3.2                   OLLAMA_HOST          Not Detected (default: http://localhost:11434)
-litellm        gemini-2.5-flash           LITELLM_BASE_URL     WILL BE USED
-gemini         gemini-2.5-flash           GEMINI_API_KEY       Detected
-openai         gpt-4o-mini                OPENAI_API_KEY       Detected
-anthropic      claude-3-5-haiku-latest    ANTHROPIC_API_KEY    Not Detected
-openrouter     google/gemini-2.5-flash    OPENROUTER_API_KEY   Detected
-deepseek       deepseek-chat              DEEPSEEK_API_KEY     Not Detected
-groq           llama-3.3-70b-versatile    GROQ_API_KEY         Not Detected
-custom         gpt-4o-mini                OPENAI_BASE_URL      Not Detected
-==================================================
-Usage Examples:
-  fetch-mix youtube -p auto <url>
-  fetch-mix youtube -p litellm -m gpt-4o-mini <url>
-  fetch-mix youtube -p ollama -m llama3.2 <url>
-  fetch-mix youtube -p openai -m gpt-4o-mini <url>
-  fetch-mix youtube -p anthropic -m claude-3-5-haiku-latest <url>
-==================================================
-```
-
-### 5. Custom Output Directory
-
-```bash
-fetch-mix -o "my_sets/bicep" "Bicep Essential Mix 2014"
-```
-
-### 6. Managing Dependencies & Auto-Install
-
-Verify, install, or update required external dependencies (`fetch-track`, `yt-dlp`, `ffmpeg`):
-
-```bash
-# Check status of required dependencies
-fetch-mix dependencies
-# Alias:
-fetch-mix deps
-
-# Auto-install all missing dependencies to ~/.local/share/fetch-mix/bin
+# Check and auto-install external dependencies
 fetch-mix deps install
-
-# Update dependencies to their latest versions
-fetch-mix deps update
 ```
 
-### 7. Upgrading `fetch-mix`
-
-Upgrade the `fetch-mix` binary itself in-place to the latest release:
-
-```bash
-fetch-mix upgrade
-# Aliases:
-fetch-mix self-update
-fetch-mix update-self
-```
-
-## Options & Flags
+# Options & Flags
 
 | Flag | Short | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `--out-dir` | `-o` | `cwd/{mix-title}` | Folder where mix tracks are saved |
-| `--dry-run` | | `false` | Preview tracklist and download plan without downloading |
-| `--auto-install` | | `false` | Automatically install missing dependencies without prompting |
-| `--no-cache` | | `false` | Disable local caching for search queries, tracklists, and comments |
-| `--llm-provider` | `-p` | `auto` | LLM provider name (`auto`, `ollama`, `litellm`, `gemini`, `openai`, `anthropic`, `openrouter`, `deepseek`, `groq`, `custom`) |
-| `--llm-model` | `-m` | | LLM model name override (e.g. `gpt-4o-mini`, `claude-3-5-haiku-latest`, `llama3.2`) |
-| `--sources` | `-s` | `youtube,soundcloud` | Comma-separated search sources passed to `fetch-track` |
+| `--out-dir <path>` | `-o` | `cwd/{mix-title}` | Output directory where mix tracks are saved |
+| `--dry-run` | `-` | `false` | Preview tracklist and download plan without downloading |
+| `--auto-install` | `-` | `false` | Automatically install missing dependencies without prompting |
+| `--no-cache` | `-` | `false` | Disable local caching for search queries, tracklists, and comments |
+| `--llm-provider <name>` | `-p` | `auto` | LLM provider name (`auto`, `ollama`, `litellm`, `gemini`, `openai`, `anthropic`, `openrouter`, `deepseek`, `groq`, `custom`) |
+| `--llm-model <name>` | `-m` | `""` | LLM model name override |
+| `--sources <list>` | `-s` | `youtube,soundcloud` | Comma-separated search sources passed to fetch-track |
 | `--interactive` | `-i` | `false` | Interactively choose set search result |
-| `--progress-target` | | `""` | Target URI for streaming NDJSON progress events (`unix:///path.sock`, `tcp://127.0.0.1:9099`, `fd://3`, `stdout`, `stderr`) |
-| `--progress-socket` | | `""` | Shorthand alias for `--progress-target` |
-| `--skip-verify` | | `false` | Skip audio quality spectrum check in `fetch-track` |
-| `--skip-metadata` | | `false` | Skip cover art and metadata tagging in `fetch-track` |
-| `--verbose` | `-v` | `false` | Show extra detailed progress logs |
+| `--progress-target <uri>` | `-` | `""` | Target URI for streaming NDJSON progress events |
+| `--progress-socket <path>` | `-` | `""` | Shorthand alias for `--progress-target` |
+| `--skip-verify` | `-` | `false` | Skip audio quality spectrum check in fetch-track |
+| `--skip-metadata` | `-` | `false` | Skip cover art and metadata tagging in fetch-track |
+| `--verbose` | `-v` | `false` | Enable verbose diagnostic logging |
+| `--version` | `-` | `false` | Print version information and exit |
+| `--help` | `-h` | `false` | Print command line help |
 
-## License
+# License
 
-This project is licensed under the [MIT License](LICENSE).
+MIT License (c) 2026 Alex Gorbatchev

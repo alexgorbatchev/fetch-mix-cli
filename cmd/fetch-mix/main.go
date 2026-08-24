@@ -169,26 +169,42 @@ parses tracklists deterministically, and downloads individual tracks using fetch
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			statuses := llm.GetProviderStatuses()
-			sep := ui.Separator("=", 50)
+			if deps.IsAgentMode() {
+				for _, s := range statuses {
+					fmt.Printf("%s\t%s\t%s\t%s\n", s.ID, s.DefaultModel, s.EnvVar, s.Status)
+				}
+				return nil
+			}
 
-			fmt.Println(sep)
+			sep := ui.Separator("=", 50)
+			if sep != "" {
+				fmt.Println(sep)
+			}
 			fmt.Println("Supported LLM Providers & Models (auto-detection priority order):")
-			fmt.Println(sep)
+			if sep != "" {
+				fmt.Println(sep)
+			}
 			fmt.Printf("%-14s %-26s %-20s %s\n", "PROVIDER", "DEFAULT MODEL", "ENV VAR", "STATUS")
-			fmt.Println(ui.Separator("-", 50))
+			if subSep := ui.Separator("-", 50); subSep != "" {
+				fmt.Println(subSep)
+			}
 
 			for _, s := range statuses {
 				fmt.Printf("%-14s %-26s %-20s %s\n", s.ID, s.DefaultModel, s.EnvVar, s.Status)
 			}
 
-			fmt.Println(sep)
+			if sep != "" {
+				fmt.Println(sep)
+			}
 			fmt.Println("Usage Examples:")
 			fmt.Println("  fetch-mix youtube -p auto <url>")
 			fmt.Println("  fetch-mix youtube -p litellm -m gpt-4o-mini <url>")
 			fmt.Println("  fetch-mix youtube -p ollama -m llama3.2 <url>")
 			fmt.Println("  fetch-mix youtube -p openai -m gpt-4o-mini <url>")
 			fmt.Println("  fetch-mix youtube -p anthropic -m claude-3-5-haiku-latest <url>")
-			fmt.Println(sep)
+			if sep != "" {
+				fmt.Println(sep)
+			}
 			return nil
 		},
 	}
@@ -245,26 +261,45 @@ parses tracklists deterministically, and downloads individual tracks using fetch
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_ = deps.InitManagedPath()
+			isAgent := deps.IsAgentMode()
 			if len(args) > 0 {
 				for _, depName := range args {
-					fmt.Printf("Installing %s...\n", depName)
+					if !isAgent {
+						fmt.Printf("Installing %s...\n", depName)
+					}
 					if err := deps.InstallDependency(cmd.Context(), depName); err != nil {
 						return fmt.Errorf("installing %s: %w", depName, err)
 					}
-					fmt.Printf("✓ %s installed successfully.\n", depName)
+					if isAgent {
+						fmt.Printf("OK: installed %s\n", depName)
+					} else {
+						fmt.Printf("[OK] %s installed successfully.\n", depName)
+					}
 				}
 				return nil
 			}
 
-			fmt.Println("Checking and installing missing dependencies...")
+			if !isAgent {
+				fmt.Println("Checking and installing missing dependencies...")
+			}
 			installed, err := deps.InstallMissingDependencies(cmd.Context())
 			if err != nil {
 				return err
 			}
 			if len(installed) == 0 {
-				fmt.Println("All dependencies are already satisfied.")
+				if isAgent {
+					fmt.Println("status: satisfied")
+				} else {
+					fmt.Println("All dependencies are already satisfied.")
+				}
 			} else {
-				fmt.Printf("Successfully installed: %s\n", strings.Join(installed, ", "))
+				if isAgent {
+					for _, depName := range installed {
+						fmt.Printf("OK: installed %s\n", depName)
+					}
+				} else {
+					fmt.Printf("[OK] Successfully installed: %s\n", strings.Join(installed, ", "))
+				}
 			}
 			return nil
 		},
@@ -277,23 +312,38 @@ parses tracklists deterministically, and downloads individual tracks using fetch
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_ = deps.InitManagedPath()
+			isAgent := deps.IsAgentMode()
 			if len(args) > 0 {
 				for _, depName := range args {
-					fmt.Printf("Updating %s...\n", depName)
+					if !isAgent {
+						fmt.Printf("Updating %s...\n", depName)
+					}
 					if err := deps.UpdateDependency(cmd.Context(), depName); err != nil {
 						return fmt.Errorf("updating %s: %w", depName, err)
 					}
-					fmt.Printf("✓ %s updated successfully.\n", depName)
+					if isAgent {
+						fmt.Printf("OK: updated %s\n", depName)
+					} else {
+						fmt.Printf("[OK] %s updated successfully.\n", depName)
+					}
 				}
 				return nil
 			}
 
-			fmt.Println("Updating all dependencies to latest versions...")
+			if !isAgent {
+				fmt.Println("Updating all dependencies to latest versions...")
+			}
 			updated, err := deps.UpdateAllDependencies(cmd.Context())
 			if err != nil {
 				return err
 			}
-			fmt.Printf("Successfully updated: %s\n", strings.Join(updated, ", "))
+			if isAgent {
+				for _, depName := range updated {
+					fmt.Printf("OK: updated %s\n", depName)
+				}
+			} else {
+				fmt.Printf("[OK] Successfully updated: %s\n", strings.Join(updated, ", "))
+			}
 			return nil
 		},
 	}
@@ -307,16 +357,27 @@ parses tracklists deterministically, and downloads individual tracks using fetch
 		Short:        "Upgrade fetch-mix CLI binary to the latest released version",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Printf("Checking for newer fetch-mix release (current version: %s)...\n", version)
+			isAgent := deps.IsAgentMode()
+			if !isAgent {
+				fmt.Printf("Checking for newer fetch-mix release (current version: %s)...\n", version)
+			}
 			newVer, err := godeps.UpgradeSelf(cmd.Context(), "alexgorbatchev", "fetch-mix-cli", version)
 			if err != nil {
 				if strings.Contains(err.Error(), "already at the latest version") {
-					fmt.Printf("fetch-mix is already up to date (%s).\n", version)
+					if isAgent {
+						fmt.Printf("status: current\nversion: %s\n", version)
+					} else {
+						fmt.Printf("fetch-mix is already up to date (%s).\n", version)
+					}
 					return nil
 				}
 				return fmt.Errorf("upgrade failed: %w", err)
 			}
-			fmt.Printf("✓ Successfully upgraded fetch-mix to version %s!\n", newVer)
+			if isAgent {
+				fmt.Printf("OK: upgraded fetch-mix to %s\n", newVer)
+			} else {
+				fmt.Printf("[OK] Successfully upgraded fetch-mix to version %s!\n", newVer)
+			}
 			return nil
 		},
 	}

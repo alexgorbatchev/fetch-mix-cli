@@ -17,14 +17,14 @@ var (
 
 // Separator returns a repeated character string.
 // In non-agent mode (agent=0) with an active TTY, it expands dynamically to terminal width (clamped to 120 max).
-// In agent mode (agent=1) or non-TTY mode, it falls back to defaultWidth.
+// In agent mode (agent=1), divider lines are prohibited and it returns an empty string.
 func Separator(char string, defaultWidth int) string {
-	if defaultWidth <= 0 {
-		defaultWidth = 50
+	if deps.IsAgentMode() {
+		return ""
 	}
 
-	if deps.IsAgentMode() {
-		return strings.Repeat(char, defaultWidth)
+	if defaultWidth <= 0 {
+		defaultWidth = 50
 	}
 
 	fd := int(os.Stdout.Fd())

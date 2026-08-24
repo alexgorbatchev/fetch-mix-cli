@@ -20,16 +20,15 @@ func TestSeparator(t *testing.T) {
 
 	os.Setenv("AGENT", "1")
 	sepAgent := Separator("=", 50)
-	if len(sepAgent) != 50 {
-		t.Errorf("In agent=1 mode, expected separator length 50, got %d", len(sepAgent))
+	if sepAgent != "" {
+		t.Errorf("In agent=1 mode, expected empty separator, got %q", sepAgent)
 	}
+	os.Unsetenv("AGENT")
 
 	sepDefault := Separator("-", 0)
 	if len(sepDefault) != 50 {
 		t.Errorf("Separator with default 0 width expected 50, got %d", len(sepDefault))
 	}
-
-	os.Unsetenv("AGENT")
 }
 
 func TestSeparator_TerminalBranches(t *testing.T) {
