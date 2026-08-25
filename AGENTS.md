@@ -81,17 +81,20 @@ fetch-mix yt <youtube_url_or_id>
 ### AI Subcommand
 ```bash
 fetch-mix ai
-# Aliases:
-fetch-mix providers
-fetch-mix models
+# Explicit verbs:
+fetch-mix ai list
+fetch-mix ai inspect <provider>
 ```
-Prints supported LLM providers, default models, required environment variables, and active API key detection status.
+Prints or inspects supported LLM providers, default models, required environment variables, and active API key detection status.
 
 ### Dependencies Subcommand
 ```bash
 fetch-mix dependencies
 # Aliases:
 fetch-mix deps
+
+# Verify status of dependencies
+fetch-mix deps verify
 
 # Auto-install missing dependencies to ~/.local/share/fetch-mix/bin
 fetch-mix deps install [dep...]

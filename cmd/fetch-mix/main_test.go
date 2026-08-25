@@ -52,11 +52,29 @@ func TestCLI_Subcommands(t *testing.T) {
 		t.Fatalf("--version failed: %v", err)
 	}
 
-	// 2. AI subcommand
+	// 2. AI subcommand & subcommands
 	cmd = newRootCmd()
 	cmd.SetArgs([]string{"ai"})
 	if err := cmd.ExecuteContext(ctx); err != nil {
 		t.Fatalf("ai subcommand failed: %v", err)
+	}
+
+	cmd = newRootCmd()
+	cmd.SetArgs([]string{"ai", "list"})
+	if err := cmd.ExecuteContext(ctx); err != nil {
+		t.Fatalf("ai list failed: %v", err)
+	}
+
+	cmd = newRootCmd()
+	cmd.SetArgs([]string{"ai", "inspect", "openai"})
+	if err := cmd.ExecuteContext(ctx); err != nil {
+		t.Fatalf("ai inspect openai failed: %v", err)
+	}
+
+	cmd = newRootCmd()
+	cmd.SetArgs([]string{"ai", "inspect", "nonexistent"})
+	if err := cmd.ExecuteContext(ctx); err == nil {
+		t.Fatalf("expected error inspecting nonexistent provider")
 	}
 
 	// 3. Dependencies subcommand (with mock cache so all deps pass)
@@ -76,10 +94,22 @@ func TestCLI_Subcommands(t *testing.T) {
 	cmd.SetArgs([]string{"dependencies"})
 	_ = cmd.ExecuteContext(ctx)
 
+	cmd = newRootCmd()
+	cmd.SetArgs([]string{"dependencies", "verify"})
+	_ = cmd.ExecuteContext(ctx)
+
+	cmd = newRootCmd()
+	cmd.SetArgs([]string{"deps", "check"})
+	_ = cmd.ExecuteContext(ctx)
+
 	// Agent mode
 	t.Setenv("AGENT", "1")
 	cmd = newRootCmd()
 	cmd.SetArgs([]string{"dependencies"})
+	_ = cmd.ExecuteContext(ctx)
+
+	cmd = newRootCmd()
+	cmd.SetArgs([]string{"dependencies", "verify"})
 	_ = cmd.ExecuteContext(ctx)
 
 	// 4. Deps install and update with multiple args
@@ -598,11 +628,34 @@ func TestCLI_RunPipelines_FullSuccess(t *testing.T) {
 	dryRun = true
 }
 
-func TestCLI_Prompts_Success(t *testing.T) {
+func TestCLI_NoArgs_HelpScreen(t *testing.T) {
+	ctx := context.Background()
+
+	// 1. Root command with no args returns help without blocking
+	cmd := newRootCmd()
+	var rootOut bytes.Buffer
+	cmd.SetOut(&rootOut)
+	cmd.SetArgs([]string{})
+	if err := cmd.ExecuteContext(ctx); err != nil {
+		t.Fatalf("root cmd with no args failed: %v", err)
+	}
+	if !strings.Contains(rootOut.String(), "fetch-mix") {
+		t.Errorf("expected help screen on empty root args, got:\n%s", rootOut.String())
+	}
+
+	// 2. YouTube command with no args returns help
+	cmd = newRootCmd()
+	var ytOut bytes.Buffer
+	cmd.SetOut(&ytOut)
+	cmd.SetArgs([]string{"youtube"})
+	if err := cmd.ExecuteContext(ctx); err != nil {
+		t.Fatalf("youtube cmd with no args failed: %v", err)
+	}
+
+	// 3. YouTube command with arguments
 	tempDir := t.TempDir()
 	t.Setenv("FETCH_MIX_DEV", "0")
 	t.Setenv("XDG_CACHE_HOME", tempDir)
-
 	c, _ := cache.New()
 	if c != nil {
 		_ = c.Put("deps_fetch-track.json", "2.0.0")
@@ -617,33 +670,55 @@ func TestCLI_Prompts_Success(t *testing.T) {
 		})
 	}
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain")
-		w.Write([]byte("== Tracklist ==\n# Artist - Track"))
-	}))
-	defer server.Close()
+	cmd = newRootCmd()
+	cmd.SetArgs([]string{"youtube", "--dry-run", "-p", "custom", "promptsuccess"})
+	_ = cmd.ExecuteContext(ctx)
+}
 
+func TestCLI_HelpTree(t *testing.T) {
 	ctx := context.Background()
 
-	// 1. Root command prompt entering direct URL
-	r, w, _ := os.Pipe()
-	_, _ = fmt.Fprintln(w, server.URL+"/prompt_set.html")
-	_ = w.Close()
-	oldStdin := os.Stdin
-	os.Stdin = r
-	defer func() { os.Stdin = oldStdin }()
-
+	// Human mode help
+	t.Setenv("AGENT", "0")
 	cmd := newRootCmd()
-	cmd.SetArgs([]string{"--dry-run", "-p", "custom"})
-	_ = cmd.ExecuteContext(ctx)
+	var outBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+	cmd.SetArgs([]string{"--help"})
+	if err := cmd.ExecuteContext(ctx); err != nil {
+		t.Fatalf("root help failed: %v", err)
+	}
+	helpOut := outBuf.String()
+	if !strings.Contains(helpOut, "├─") && !strings.Contains(helpOut, "╰─") {
+		t.Errorf("expected tree branch glyphs in human help output, got:\n%s", helpOut)
+	}
+	if !strings.Contains(helpOut, "dependencies") || !strings.Contains(helpOut, "install") {
+		t.Errorf("expected command tree to include dependencies and install, got:\n%s", helpOut)
+	}
 
-	// 2. YouTube command prompt entering cached video ID
-	r2, w2, _ := os.Pipe()
-	_, _ = fmt.Fprintln(w2, "promptsuccess")
-	_ = w2.Close()
-	os.Stdin = r2
-
+	// Subcommand help
+	var subBuf bytes.Buffer
 	cmd = newRootCmd()
-	cmd.SetArgs([]string{"youtube", "--dry-run", "-p", "custom"})
-	_ = cmd.ExecuteContext(ctx)
+	cmd.SetOut(&subBuf)
+	cmd.SetArgs([]string{"dependencies", "--help"})
+	if err := cmd.ExecuteContext(ctx); err != nil {
+		t.Fatalf("subcommand help failed: %v", err)
+	}
+	subHelp := subBuf.String()
+	if !strings.Contains(subHelp, "install") || !strings.Contains(subHelp, "verify") {
+		t.Errorf("expected dependencies help to list subcommands, got:\n%s", subHelp)
+	}
+
+	// Agent mode help
+	t.Setenv("AGENT", "1")
+	var agentBuf bytes.Buffer
+	cmd = newRootCmd()
+	cmd.SetOut(&agentBuf)
+	cmd.SetArgs([]string{"--help"})
+	if err := cmd.ExecuteContext(ctx); err != nil {
+		t.Fatalf("agent help failed: %v", err)
+	}
+	agentHelp := agentBuf.String()
+	if !strings.Contains(agentHelp, "command: fetch-mix") {
+		t.Errorf("expected agent help format with 'command: fetch-mix', got:\n%s", agentHelp)
+	}
 }

@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/deps"
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/downloader"
@@ -89,14 +90,7 @@ parses tracklists deterministically, and downloads individual tracks using fetch
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
-				reader := bufio.NewReader(os.Stdin)
-				fmt.Print("Enter DJ set title or URL (e.g. 'Bicep Essential Mix 2014'): ")
-				input, _ := reader.ReadString('\n')
-				input = strings.TrimSpace(input)
-				if input == "" {
-					return fmt.Errorf("no query provided")
-				}
-				args = []string{input}
+				return cmd.Help()
 			}
 
 			targetQuery := strings.TrimSpace(strings.Join(args, " "))
@@ -113,36 +107,44 @@ parses tracklists deterministically, and downloads individual tracks using fetch
 
 	rootCmd.SetVersionTemplate("{{.Version}}\n")
 
-	rootCmd.Flags().StringVarP(&outDir, "out-dir", "o", "", "Output directory for downloaded tracks (default: cwd/{mix-title})")
-	rootCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview tracklist and download plan without downloading files")
-	rootCmd.Flags().BoolVar(&noCache, "no-cache", false, "Disable local caching for search queries, tracklists, and comments")
-	rootCmd.Flags().StringVarP(&sourcesFlag, "sources", "s", "youtube,soundcloud", "Comma-separated search sources passed to fetch-track CLI")
-	rootCmd.Flags().BoolVar(&skipVerify, "skip-verify", false, "Skip DJ audio quality verification in fetch-track CLI")
-	rootCmd.Flags().BoolVar(&skipMetadata, "skip-metadata", false, "Skip metadata lookup and cover art tagging in fetch-track CLI")
-	rootCmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Interactively choose set search result")
-	rootCmd.Flags().StringVarP(&llmProvider, "llm-provider", "p", "auto", "LLM provider name (auto, ollama, litellm, gemini, openai, anthropic, openrouter, deepseek, groq, custom)")
-	rootCmd.Flags().StringVarP(&llmModel, "llm-model", "m", "", "LLM model name override")
-	rootCmd.Flags().StringVar(&progressTarget, "progress-target", "", "Target URI/address for streaming JSON progress events (e.g. unix:///path/to.sock, tcp://127.0.0.1:9099, fd://3, stdout, stderr)")
-	rootCmd.Flags().StringVar(&progressSocket, "progress-socket", "", "Shorthand alias for --progress-target")
-	rootCmd.Flags().BoolVar(&autoInstall, "auto-install", false, "Automatically install missing dependencies without prompting")
-	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose log output")
+	addPipelineFlags(rootCmd.Flags())
+	rootCmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Interactively choose search result")
+	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose logging")
 
+	rootCmd.AddCommand(newYouTubeCmd())
+	rootCmd.AddCommand(newAICmd())
+	rootCmd.AddCommand(newDepsCmd())
+	rootCmd.AddCommand(newUpgradeCmd())
+
+	setupHelp(rootCmd)
+
+	return rootCmd
+}
+
+func addPipelineFlags(flags *pflag.FlagSet) {
+	flags.StringVarP(&outDir, "out-dir", "o", "", "Output directory for tracks (default: cwd/{mix-title})")
+	flags.BoolVar(&dryRun, "dry-run", false, "Preview tracklist without downloading")
+	flags.BoolVar(&noCache, "no-cache", false, "Disable local caching")
+	flags.StringVarP(&sourcesFlag, "sources", "s", "youtube,soundcloud", "Search sources passed to fetch-track CLI")
+	flags.BoolVar(&skipVerify, "skip-verify", false, "Skip audio quality verification")
+	flags.BoolVar(&skipMetadata, "skip-metadata", false, "Skip cover art and metadata tagging")
+	flags.StringVarP(&llmProvider, "llm-provider", "p", "auto", "LLM provider name (e.g. ollama, gemini, openai)")
+	flags.StringVarP(&llmModel, "llm-model", "m", "", "LLM model override")
+	flags.StringVar(&progressTarget, "progress-target", "", "Target URI for streaming JSON progress events")
+	flags.StringVar(&progressSocket, "progress-socket", "", "Shorthand alias for --progress-target")
+	flags.BoolVar(&autoInstall, "auto-install", false, "Auto-install missing dependencies")
+}
+
+func newYouTubeCmd() *cobra.Command {
 	youtubeCmd := &cobra.Command{
-		Use:          "youtube <youtube_url_or_video_id>",
+		Use:          "youtube <url|id>",
 		Aliases:      []string{"yt"},
-		Short:        "Extract tracklist from YouTube comments via LLM and download tracks",
+		Short:        "Extract tracklist from YouTube comments and download",
 		SilenceUsage: true,
 		Args:         cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
-				reader := bufio.NewReader(os.Stdin)
-				fmt.Print("Enter YouTube video URL: ")
-				input, _ := reader.ReadString('\n')
-				input = strings.TrimSpace(input)
-				if input == "" {
-					return fmt.Errorf("no YouTube URL provided")
-				}
-				args = []string{input}
+				return cmd.Help()
 			}
 
 			videoURL := strings.TrimSpace(strings.Join(args, " "))
@@ -150,211 +152,305 @@ parses tracklists deterministically, and downloads individual tracks using fetch
 		},
 	}
 
-	youtubeCmd.Flags().StringVarP(&outDir, "out-dir", "o", "", "Output directory for downloaded tracks (default: cwd/{mix-title})")
-	youtubeCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview tracklist and download plan without downloading files")
-	youtubeCmd.Flags().BoolVar(&noCache, "no-cache", false, "Disable local caching for YouTube comment fetching and tracklist extraction")
-	youtubeCmd.Flags().StringVarP(&sourcesFlag, "sources", "s", "youtube,soundcloud", "Comma-separated search sources passed to fetch-track CLI")
-	youtubeCmd.Flags().BoolVar(&skipVerify, "skip-verify", false, "Skip DJ audio quality verification in fetch-track CLI")
-	youtubeCmd.Flags().BoolVar(&skipMetadata, "skip-metadata", false, "Skip metadata lookup and cover art tagging in fetch-track CLI")
-	youtubeCmd.Flags().StringVarP(&llmProvider, "llm-provider", "p", "auto", "LLM provider name (auto, ollama, litellm, gemini, openai, anthropic, openrouter, deepseek, groq, custom)")
-	youtubeCmd.Flags().StringVarP(&llmModel, "llm-model", "m", "", "LLM model name override")
-	youtubeCmd.Flags().StringVar(&progressTarget, "progress-target", "", "Target URI/address for streaming JSON progress events (e.g. unix:///path/to.sock, tcp://127.0.0.1:9099, fd://3, stdout, stderr)")
-	youtubeCmd.Flags().StringVar(&progressSocket, "progress-socket", "", "Shorthand alias for --progress-target")
-	youtubeCmd.Flags().BoolVar(&autoInstall, "auto-install", false, "Automatically install missing dependencies without prompting")
+	addPipelineFlags(youtubeCmd.Flags())
+	return youtubeCmd
+}
 
+func newAICmd() *cobra.Command {
 	aiCmd := &cobra.Command{
 		Use:          "ai",
 		Aliases:      []string{"providers", "models"},
-		Short:        "Print supported LLM providers, models, active API key status, and AI configuration",
+		Short:        "Manage and inspect AI / LLM configuration",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			statuses := llm.GetProviderStatuses()
-			if deps.IsAgentMode() {
-				for _, s := range statuses {
-					fmt.Printf("%s\t%s\t%s\t%s\n", s.ID, s.DefaultModel, s.EnvVar, s.Status)
-				}
-				return nil
-			}
-
-			sep := ui.Separator("=", 50)
-			if sep != "" {
-				fmt.Println(sep)
-			}
-			fmt.Println("Supported LLM Providers & Models (auto-detection priority order):")
-			if sep != "" {
-				fmt.Println(sep)
-			}
-			fmt.Printf("%-14s %-26s %-20s %s\n", "PROVIDER", "DEFAULT MODEL", "ENV VAR", "STATUS")
-			if subSep := ui.Separator("-", 50); subSep != "" {
-				fmt.Println(subSep)
-			}
-
-			for _, s := range statuses {
-				fmt.Printf("%-14s %-26s %-20s %s\n", s.ID, s.DefaultModel, s.EnvVar, s.Status)
-			}
-
-			if sep != "" {
-				fmt.Println(sep)
-			}
-			fmt.Println("Usage Examples:")
-			fmt.Println("  fetch-mix youtube -p auto <url>")
-			fmt.Println("  fetch-mix youtube -p litellm -m gpt-4o-mini <url>")
-			fmt.Println("  fetch-mix youtube -p ollama -m llama3.2 <url>")
-			fmt.Println("  fetch-mix youtube -p openai -m gpt-4o-mini <url>")
-			fmt.Println("  fetch-mix youtube -p anthropic -m claude-3-5-haiku-latest <url>")
-			if sep != "" {
-				fmt.Println(sep)
-			}
-			return nil
+			return runAIList(cmd)
 		},
 	}
 
+	aiListCmd := &cobra.Command{
+		Use:          "list",
+		Aliases:      []string{"ls"},
+		Short:        "List supported LLM providers and models",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runAIList(cmd)
+		},
+	}
+
+	aiInspectCmd := &cobra.Command{
+		Use:          "inspect <provider>",
+		Aliases:      []string{"show", "get"},
+		Short:        "Inspect configuration and status of an LLM provider",
+		SilenceUsage: true,
+		Args:         cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runAIInspect(cmd, args[0])
+		},
+	}
+
+	aiCmd.AddCommand(aiListCmd)
+	aiCmd.AddCommand(aiInspectCmd)
+	return aiCmd
+}
+
+func runAIList(cmd *cobra.Command) error {
+	statuses := llm.GetProviderStatuses()
+	if deps.IsAgentMode() {
+		for _, s := range statuses {
+			fmt.Printf("%s\t%s\t%s\t%s\n", s.ID, s.DefaultModel, s.EnvVar, s.Status)
+		}
+		return nil
+	}
+
+	sep := ui.Separator("=", 50)
+	if sep != "" {
+		fmt.Println(sep)
+	}
+	fmt.Println("Supported LLM Providers & Models (auto-detection priority order):")
+	if sep != "" {
+		fmt.Println(sep)
+	}
+	fmt.Printf("%-14s %-26s %-20s %s\n", "PROVIDER", "DEFAULT MODEL", "ENV VAR", "STATUS")
+	if subSep := ui.Separator("-", 50); subSep != "" {
+		fmt.Println(subSep)
+	}
+
+	for _, s := range statuses {
+		fmt.Printf("%-14s %-26s %-20s %s\n", s.ID, s.DefaultModel, s.EnvVar, s.Status)
+	}
+
+	if sep != "" {
+		fmt.Println(sep)
+	}
+	fmt.Println("Usage Examples:")
+	fmt.Println("  fetch-mix youtube -p auto <url>")
+	fmt.Println("  fetch-mix youtube -p litellm -m gpt-4o-mini <url>")
+	fmt.Println("  fetch-mix youtube -p ollama -m llama3.2 <url>")
+	fmt.Println("  fetch-mix youtube -p openai -m gpt-4o-mini <url>")
+	fmt.Println("  fetch-mix youtube -p anthropic -m claude-3-5-haiku-latest <url>")
+	if sep != "" {
+		fmt.Println(sep)
+	}
+	return nil
+}
+
+func runAIInspect(cmd *cobra.Command, providerName string) error {
+	providerID := strings.ToLower(strings.TrimSpace(providerName))
+	statuses := llm.GetProviderStatuses()
+	var found *llm.ProviderInfo
+	for _, s := range statuses {
+		if strings.ToLower(s.ID) == providerID || strings.ToLower(s.Name) == providerID {
+			target := s
+			found = &target
+			break
+		}
+	}
+
+	if found == nil {
+		var validIDs []string
+		for _, s := range statuses {
+			validIDs = append(validIDs, s.ID)
+		}
+		return fmt.Errorf("unknown provider %q (supported: %s)", providerName, strings.Join(validIDs, ", "))
+	}
+
+	if deps.IsAgentMode() {
+		fmt.Printf("provider: %s\nname: %s\ndefault_model: %s\nenv_var: %s\nstatus: %s\n",
+			found.ID, found.Name, found.DefaultModel, found.EnvVar, found.Status)
+		return nil
+	}
+
+	sep := ui.Separator("=", 50)
+	if sep != "" {
+		fmt.Println(sep)
+	}
+	fmt.Printf("Provider Details: %s\n", found.Name)
+	if sep != "" {
+		fmt.Println(sep)
+	}
+	fmt.Printf("Provider ID    : %s\n", found.ID)
+	fmt.Printf("Default Model  : %s\n", found.DefaultModel)
+	fmt.Printf("Environment Var: %s\n", found.EnvVar)
+	fmt.Printf("Status         : %s\n", found.Status)
+	if sep != "" {
+		fmt.Println(sep)
+	}
+	return nil
+}
+
+func newDepsCmd() *cobra.Command {
 	depsCmd := &cobra.Command{
 		Use:          "dependencies",
 		Aliases:      []string{"deps"},
-		Short:        "Verify required external binary dependencies (fetch-track, yt-dlp, ffmpeg)",
+		Short:        "Manage external binary dependencies (fetch-track, yt-dlp, ffmpeg)",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			isAgent := deps.IsAgentMode()
-			reports, err := deps.VerifyDependencies(cmd.Context())
+			return runDepsVerify(cmd)
+		},
+	}
 
-			if isAgent {
-				for _, r := range reports {
-					if r.Satisfied {
-						fmt.Printf("%s: ok (version %s, min %s)\n", r.Name, r.DetectedVersion, r.MinVersion)
-					} else if !r.Installed {
-						fmt.Printf("%s: missing\n", r.Name)
-					} else {
-						fmt.Printf("%s: fail (version %s, min %s)\n", r.Name, r.DetectedVersion, r.MinVersion)
-					}
-				}
-				if err != nil {
-					fmt.Printf("status: error\nerror: %v\n", err)
-					return err
-				}
-				fmt.Println("status: ok")
-				return nil
-			}
-
-			for _, r := range reports {
-				if r.Satisfied {
-					fmt.Printf("%s: %s (min %s) [OK]\n", r.Name, r.DetectedVersion, r.MinVersion)
-				} else if !r.Installed {
-					fmt.Printf("%s: missing in $PATH [FAIL] - %s\n", r.Name, r.Error)
-				} else {
-					fmt.Printf("%s: %s (min %s) [FAIL] - %s\n", r.Name, r.DetectedVersion, r.MinVersion, r.Error)
-				}
-			}
-
-			if err != nil {
-				return err
-			}
-			fmt.Println("\nAll required dependencies are installed and operational.")
-			return nil
+	depsVerifyCmd := &cobra.Command{
+		Use:          "verify",
+		Aliases:      []string{"check", "status"},
+		Short:        "Verify required external binary dependencies",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runDepsVerify(cmd)
 		},
 	}
 
 	depsInstallCmd := &cobra.Command{
-		Use:          "install [dependency...]",
+		Use:          "install [dep...]",
 		Aliases:      []string{"add", "get"},
-		Short:        "Install missing external dependencies (fetch-track, yt-dlp, ffmpeg)",
+		Short:        "Install missing external dependencies",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_ = deps.InitManagedPath()
-			isAgent := deps.IsAgentMode()
-			if len(args) > 0 {
-				for _, depName := range args {
-					if !isAgent {
-						fmt.Printf("Installing %s...\n", depName)
-					}
-					if err := deps.InstallDependency(cmd.Context(), depName); err != nil {
-						return fmt.Errorf("installing %s: %w", depName, err)
-					}
-					if isAgent {
-						fmt.Printf("OK: installed %s\n", depName)
-					} else {
-						fmt.Printf("[OK] %s installed successfully.\n", depName)
-					}
-				}
-				return nil
-			}
-
-			if !isAgent {
-				fmt.Println("Checking and installing missing dependencies...")
-			}
-			installed, err := deps.InstallMissingDependencies(cmd.Context())
-			if err != nil {
-				return err
-			}
-			if len(installed) == 0 {
-				if isAgent {
-					fmt.Println("status: satisfied")
-				} else {
-					fmt.Println("All dependencies are already satisfied.")
-				}
-			} else {
-				if isAgent {
-					for _, depName := range installed {
-						fmt.Printf("OK: installed %s\n", depName)
-					}
-				} else {
-					fmt.Printf("[OK] Successfully installed: %s\n", strings.Join(installed, ", "))
-				}
-			}
-			return nil
+			return runDepsInstall(cmd, args)
 		},
 	}
 
 	depsUpdateCmd := &cobra.Command{
-		Use:          "update [dependency...]",
+		Use:          "update [dep...]",
 		Aliases:      []string{"upgrade"},
-		Short:        "Update external dependencies to their latest versions",
+		Short:        "Update external dependencies to latest versions",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_ = deps.InitManagedPath()
-			isAgent := deps.IsAgentMode()
-			if len(args) > 0 {
-				for _, depName := range args {
-					if !isAgent {
-						fmt.Printf("Updating %s...\n", depName)
-					}
-					if err := deps.UpdateDependency(cmd.Context(), depName); err != nil {
-						return fmt.Errorf("updating %s: %w", depName, err)
-					}
-					if isAgent {
-						fmt.Printf("OK: updated %s\n", depName)
-					} else {
-						fmt.Printf("[OK] %s updated successfully.\n", depName)
-					}
-				}
-				return nil
-			}
-
-			if !isAgent {
-				fmt.Println("Updating all dependencies to latest versions...")
-			}
-			updated, err := deps.UpdateAllDependencies(cmd.Context())
-			if err != nil {
-				return err
-			}
-			if isAgent {
-				for _, depName := range updated {
-					fmt.Printf("OK: updated %s\n", depName)
-				}
-			} else {
-				fmt.Printf("[OK] Successfully updated: %s\n", strings.Join(updated, ", "))
-			}
-			return nil
+			return runDepsUpdate(cmd, args)
 		},
 	}
 
+	depsCmd.AddCommand(depsVerifyCmd)
 	depsCmd.AddCommand(depsInstallCmd)
 	depsCmd.AddCommand(depsUpdateCmd)
+	return depsCmd
+}
 
-	upgradeCmd := &cobra.Command{
+func runDepsVerify(cmd *cobra.Command) error {
+	isAgent := deps.IsAgentMode()
+	reports, err := deps.VerifyDependencies(cmd.Context())
+
+	if isAgent {
+		for _, r := range reports {
+			if r.Satisfied {
+				fmt.Printf("%s: ok (version %s, min %s)\n", r.Name, r.DetectedVersion, r.MinVersion)
+			} else if !r.Installed {
+				fmt.Printf("%s: missing\n", r.Name)
+			} else {
+				fmt.Printf("%s: fail (version %s, min %s)\n", r.Name, r.DetectedVersion, r.MinVersion)
+			}
+		}
+		if err != nil {
+			fmt.Printf("status: error\nerror: %v\n", err)
+			return err
+		}
+		fmt.Println("status: ok")
+		return nil
+	}
+
+	for _, r := range reports {
+		if r.Satisfied {
+			fmt.Printf("%s: %s (min %s) [OK]\n", r.Name, r.DetectedVersion, r.MinVersion)
+		} else if !r.Installed {
+			fmt.Printf("%s: missing in $PATH [FAIL] - %s\n", r.Name, r.Error)
+		} else {
+			fmt.Printf("%s: %s (min %s) [FAIL] - %s\n", r.Name, r.DetectedVersion, r.MinVersion, r.Error)
+		}
+	}
+
+	if err != nil {
+		return err
+	}
+	fmt.Println("\nAll required dependencies are installed and operational.")
+	return nil
+}
+
+func runDepsInstall(cmd *cobra.Command, args []string) error {
+	_ = deps.InitManagedPath()
+	isAgent := deps.IsAgentMode()
+	if len(args) > 0 {
+		for _, depName := range args {
+			if !isAgent {
+				fmt.Printf("Installing %s...\n", depName)
+			}
+			if err := deps.InstallDependency(cmd.Context(), depName); err != nil {
+				return fmt.Errorf("installing %s: %w", depName, err)
+			}
+			if isAgent {
+				fmt.Printf("OK: installed %s\n", depName)
+			} else {
+				fmt.Printf("[OK] %s installed successfully.\n", depName)
+			}
+		}
+		return nil
+	}
+
+	if !isAgent {
+		fmt.Println("Checking and installing missing dependencies...")
+	}
+	installed, err := deps.InstallMissingDependencies(cmd.Context())
+	if err != nil {
+		return err
+	}
+	if len(installed) == 0 {
+		if isAgent {
+			fmt.Println("status: satisfied")
+		} else {
+			fmt.Println("All dependencies are already satisfied.")
+		}
+	} else {
+		if isAgent {
+			for _, depName := range installed {
+				fmt.Printf("OK: installed %s\n", depName)
+			}
+		} else {
+			fmt.Printf("[OK] Successfully installed: %s\n", strings.Join(installed, ", "))
+		}
+	}
+	return nil
+}
+
+func runDepsUpdate(cmd *cobra.Command, args []string) error {
+	_ = deps.InitManagedPath()
+	isAgent := deps.IsAgentMode()
+	if len(args) > 0 {
+		for _, depName := range args {
+			if !isAgent {
+				fmt.Printf("Updating %s...\n", depName)
+			}
+			if err := deps.UpdateDependency(cmd.Context(), depName); err != nil {
+				return fmt.Errorf("updating %s: %w", depName, err)
+			}
+			if isAgent {
+				fmt.Printf("OK: updated %s\n", depName)
+			} else {
+				fmt.Printf("[OK] %s updated successfully.\n", depName)
+			}
+		}
+		return nil
+	}
+
+	if !isAgent {
+		fmt.Println("Updating all dependencies to latest versions...")
+	}
+	updated, err := deps.UpdateAllDependencies(cmd.Context())
+	if err != nil {
+		return err
+	}
+	if isAgent {
+		for _, depName := range updated {
+			fmt.Printf("OK: updated %s\n", depName)
+		}
+	} else {
+		fmt.Printf("[OK] Successfully updated: %s\n", strings.Join(updated, ", "))
+	}
+	return nil
+}
+
+func newUpgradeCmd() *cobra.Command {
+	return &cobra.Command{
 		Use:          "upgrade",
 		Aliases:      []string{"self-update", "update-self"},
-		Short:        "Upgrade fetch-mix CLI binary to the latest released version",
+		Short:        "Upgrade fetch-mix binary to latest release",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			isAgent := deps.IsAgentMode()
@@ -381,13 +477,6 @@ parses tracklists deterministically, and downloads individual tracks using fetch
 			return nil
 		},
 	}
-
-	rootCmd.AddCommand(youtubeCmd)
-	rootCmd.AddCommand(aiCmd)
-	rootCmd.AddCommand(depsCmd)
-	rootCmd.AddCommand(upgradeCmd)
-
-	return rootCmd
 }
 
 func resolveProgressReporter(ctx context.Context) (*progress.Reporter, error) {
