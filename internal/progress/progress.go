@@ -59,29 +59,45 @@ type ResultInfo struct {
 
 // TrackInfo describes a set-level track item.
 type TrackInfo struct {
-	Index        int    `json:"index"`
+	Index           int      `json:"index"`
+	TotalTracks     int      `json:"total_tracks"`
+	Artist          string   `json:"artist"`
+	Title           string   `json:"title"`
+	Timestamp       string   `json:"timestamp,omitempty"`
+	ActualFile      string   `json:"actual_file,omitempty"`
+	Status          string   `json:"status,omitempty"`
+	ErrorMessage    string   `json:"error,omitempty"`
+	Duration        float64  `json:"duration_seconds,omitempty"`
+	BandwidthHz     int      `json:"bandwidth_hz,omitempty"`
+	BandwidthRating string   `json:"bandwidth_rating,omitempty"`
+	SuggestedGainDb *float64 `json:"suggested_gain_db,omitempty"`
+}
+
+// MixSummaryInfo describes the full mix acquisition result.
+type MixSummaryInfo struct {
+	MixTitle     string `json:"mix_title"`
+	TargetDir    string `json:"target_dir"`
+	PlaylistPath string `json:"playlist_path,omitempty"`
 	TotalTracks  int    `json:"total_tracks"`
-	Artist       string `json:"artist"`
-	Title        string `json:"title"`
-	Timestamp    string `json:"timestamp,omitempty"`
-	ActualFile   string `json:"actual_file,omitempty"`
-	Status       string `json:"status,omitempty"`
-	ErrorMessage string `json:"error,omitempty"`
+	Downloaded   int    `json:"downloaded"`
+	Failed       int    `json:"failed"`
+	Skipped      int    `json:"skipped,omitempty"`
 }
 
 // Event represents an atomic structured telemetry/progress update sent over the socket.
 type Event struct {
-	Timestamp  time.Time      `json:"timestamp"`
-	Type       EventType      `json:"type"`
-	Phase      string         `json:"phase,omitempty"`
-	Step       int            `json:"step,omitempty"`
-	TotalSteps int            `json:"total_steps,omitempty"`
-	Message    string         `json:"message,omitempty"`
-	Percent    float64        `json:"percent,omitempty"`
-	Track      *TrackInfo     `json:"track,omitempty"`
-	Candidate  *CandidateInfo `json:"candidate,omitempty"`
-	Result     *ResultInfo    `json:"result,omitempty"`
-	Error      string         `json:"error,omitempty"`
+	Timestamp  time.Time       `json:"timestamp"`
+	Type       EventType       `json:"type"`
+	Phase      string          `json:"phase,omitempty"`
+	Step       int             `json:"step,omitempty"`
+	TotalSteps int             `json:"total_steps,omitempty"`
+	Message    string          `json:"message,omitempty"`
+	Percent    float64         `json:"percent,omitempty"`
+	Track      *TrackInfo      `json:"track,omitempty"`
+	Candidate  *CandidateInfo  `json:"candidate,omitempty"`
+	Result     *ResultInfo     `json:"result,omitempty"`
+	Summary    *MixSummaryInfo `json:"summary,omitempty"`
+	Error      string          `json:"error,omitempty"`
 }
 
 // Decoder wraps json.Decoder for reading NDJSON lines.
@@ -249,6 +265,13 @@ func SetForceTCPListenerForTest(force bool) {
 	forceTCPListener = force
 }
 
+func getSocketDir() string {
+	if err := os.MkdirAll(".tmp", 0755); err == nil {
+		return ".tmp"
+	}
+	return os.TempDir()
+}
+
 // StartSocketServer creates a progress socket listener.
 // On POSIX systems, it uses a UNIX domain socket.
 // On Windows or if UNIX sockets fail, it falls back to a local TCP socket (127.0.0.1:0).
@@ -260,7 +283,7 @@ func StartSocketServer(ctx context.Context, onEvent func(Event)) (*SocketServer,
 	var sockPath string
 
 	if runtime.GOOS != "windows" && !forceTCPListener {
-		sockPath = filepath.Join(os.TempDir(), fmt.Sprintf("ft_%d_%d.sock", os.Getpid(), time.Now().UnixNano()))
+		sockPath = filepath.Join(getSocketDir(), fmt.Sprintf("fm_%d_%d.sock", os.Getpid(), time.Now().UnixNano()))
 		_ = os.Remove(sockPath)
 
 		l, err := net.Listen("unix", sockPath)

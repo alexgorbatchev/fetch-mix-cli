@@ -27,6 +27,10 @@ run-ai *ARGS:
 youtube *ARGS:
 	go run ./cmd/fetch-mix youtube {{ARGS}}
 
+# Run out-of-band progress socket demo
+demo-progress *ARGS:
+	./scripts/demo-progress-socket.sh {{ARGS}}
+
 # Run all unit tests
 test:
 	go test -v ./...

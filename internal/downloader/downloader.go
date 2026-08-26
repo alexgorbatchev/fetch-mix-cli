@@ -199,6 +199,49 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 	hasHours := HasHourTimestamps(opts.Tracks, opts.SkippedItems)
 
 	if opts.DryRun {
+		if opts.ProgressReporter != nil {
+			_ = opts.ProgressReporter.Emit(progress.Event{
+				Type:    progress.EventPhaseStart,
+				Phase:   "dry_run",
+				Message: fmt.Sprintf("Dry run preview for %q (%d tracks)", opts.MixTitle, totalTracks),
+				Summary: &progress.MixSummaryInfo{
+					MixTitle:     opts.MixTitle,
+					TargetDir:    targetDir,
+					PlaylistPath: playlistPath,
+					TotalTracks:  totalTracks,
+					Skipped:      len(opts.SkippedItems),
+				},
+			})
+			for i, track := range opts.Tracks {
+				_ = opts.ProgressReporter.Emit(progress.Event{
+					Type:       progress.EventTrackStart,
+					Phase:      "dry_run",
+					Step:       i + 1,
+					TotalSteps: totalTracks,
+					Track: &progress.TrackInfo{
+						Index:       i + 1,
+						TotalTracks: totalTracks,
+						Artist:      track.Artist,
+						Title:       track.Title,
+						Timestamp:   track.Timestamp,
+						Status:      "planned",
+					},
+				})
+			}
+			_ = opts.ProgressReporter.Emit(progress.Event{
+				Type:    progress.EventComplete,
+				Phase:   "dry_run",
+				Message: "Dry run preview completed",
+				Summary: &progress.MixSummaryInfo{
+					MixTitle:     opts.MixTitle,
+					TargetDir:    targetDir,
+					PlaylistPath: playlistPath,
+					TotalTracks:  totalTracks,
+					Skipped:      len(opts.SkippedItems),
+				},
+			})
+		}
+
 		if isAgent := deps.IsAgentMode(); isAgent {
 			fmt.Printf("status: dry_run\ntarget_dir: %s\nplaylist: %s\ntotal_tracks: %d\n", targetDir, playlistPath, totalTracks)
 			for i, track := range opts.Tracks {
@@ -285,6 +328,16 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 	failureCount := 0
 	isAgent := deps.IsAgentMode()
 
+	if opts.ProgressReporter != nil {
+		_ = opts.ProgressReporter.Emit(progress.Event{
+			Type:       progress.EventPhaseStart,
+			Phase:      "download",
+			Step:       1,
+			TotalSteps: totalTracks,
+			Message:    fmt.Sprintf("Starting sequential download of %d tracks for %q", totalTracks, opts.MixTitle),
+		})
+	}
+
 	for i, track := range opts.Tracks {
 		select {
 		case <-ctx.Done():
@@ -305,6 +358,24 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 				fileOnDisk := filepath.Join(targetDir, entry.ActualFile)
 				if fi, err := os.Stat(fileOnDisk); err == nil && fi.Size() > 0 {
 					fmt.Printf("[%02d/%02d] Skipping already downloaded track: %s\n", trackNum, totalTracks, entry.ActualFile)
+					if opts.ProgressReporter != nil {
+						_ = opts.ProgressReporter.Emit(progress.Event{
+							Type:       progress.EventTrackComplete,
+							Phase:      "download",
+							Step:       trackNum,
+							TotalSteps: totalTracks,
+							Message:    fmt.Sprintf("Skipping already downloaded track [%02d/%02d]: %s", trackNum, totalTracks, entry.ActualFile),
+							Track: &progress.TrackInfo{
+								Index:       trackNum,
+								TotalTracks: totalTracks,
+								Artist:      track.Artist,
+								Title:       track.Title,
+								Timestamp:   track.Timestamp,
+								ActualFile:  entry.ActualFile,
+								Status:      "skipped",
+							},
+						})
+					}
 					successCount++
 					continue
 				}
@@ -323,6 +394,24 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 		}
 
 		fmt.Printf("[%02d/%02d] Fetching track: %s - %s%s\n", trackNum, totalTracks, track.Artist, track.Title, timestampInfo)
+
+		if opts.ProgressReporter != nil {
+			_ = opts.ProgressReporter.Emit(progress.Event{
+				Type:       progress.EventTrackStart,
+				Phase:      "download",
+				Step:       trackNum,
+				TotalSteps: totalTracks,
+				Message:    fmt.Sprintf("Fetching track [%02d/%02d]: %s - %s", trackNum, totalTracks, track.Artist, track.Title),
+				Track: &progress.TrackInfo{
+					Index:       trackNum,
+					TotalTracks: totalTracks,
+					Artist:      track.Artist,
+					Title:       track.Title,
+					Timestamp:   track.Timestamp,
+					Status:      "pending",
+				},
+			})
+		}
 
 		// Take pre-download snapshot of targetDir files
 		preSnapshot := SnapshotFiles(targetDir)
@@ -352,68 +441,73 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 		var cmdErr error
 		var stdoutBuf, stderrBuf bytes.Buffer
 
+		currentTrackInfo := &progress.TrackInfo{
+			Index:       trackNum,
+			TotalTracks: totalTracks,
+			Artist:      track.Artist,
+			Title:       track.Title,
+			Timestamp:   track.Timestamp,
+		}
+
+		sockServer, sockTarget, sockErr := progress.StartSocketServer(ctx, func(ev progress.Event) {
+			switch ev.Type {
+			case progress.EventPhaseStart:
+				if !opts.Verbose && !isAgent {
+					switch ev.Phase {
+					case "search":
+						fmt.Printf("  - Searching sources: %s\n", opts.Sources)
+					case "download":
+						fmt.Println("  - Downloading audio stream & artwork...")
+					case "verify":
+						fmt.Println("  - Inspecting audio quality & spectrum...")
+					case "metadata":
+						fmt.Println("  - Enriching metadata & cover art...")
+					}
+				}
+			case progress.EventCandidateSelected:
+				lastCandidate = ev.Candidate
+				if !opts.Verbose && !isAgent && ev.Candidate != nil {
+					durStr := ""
+					if ev.Candidate.Duration > 0 {
+						durStr = fmt.Sprintf(" [%s %s]", ev.Candidate.Source, formatDuration(ev.Candidate.Duration))
+					}
+					fmt.Printf("  - Selected: %q%s\n", ev.Candidate.Title, durStr)
+				}
+			case progress.EventComplete:
+				lastResult = ev.Result
+			case progress.EventError:
+				lastError = ev.Error
+			}
+
+			if opts.ProgressReporter != nil {
+				if ev.Track == nil {
+					ev.Track = currentTrackInfo
+				}
+				_ = opts.ProgressReporter.Emit(ev)
+			}
+		})
+
+		args := append([]string{}, baseArgs...)
+		if sockErr == nil && sockServer != nil {
+			args = append(args, "--progress-target", sockTarget)
+		}
+
+		cmd := cmdutil.NewCommand(ctx, fetchTrackCmdName, args...)
 		if isAgent {
-			// Agent mode: preserve standard machine-readable output format
-			cmd := cmdutil.NewCommand(ctx, fetchTrackCmdName, baseArgs...)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
-			cmdErr = cmd.Run()
+		} else if opts.Verbose || sockServer == nil {
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
 		} else {
-			// Interactive / non-agent mode (agent=0): stream progress over socket server
-			sockServer, sockTarget, sockErr := progress.StartSocketServer(ctx, func(ev progress.Event) {
-				switch ev.Type {
-				case progress.EventPhaseStart:
-					if !opts.Verbose {
-						switch ev.Phase {
-						case "search":
-							fmt.Printf("  - Searching sources: %s\n", opts.Sources)
-						case "download":
-							fmt.Println("  - Downloading audio stream & artwork...")
-						case "verify":
-							fmt.Println("  - Inspecting audio quality & spectrum...")
-						case "metadata":
-							fmt.Println("  - Enriching metadata & cover art...")
-						}
-					}
-				case progress.EventCandidateSelected:
-					lastCandidate = ev.Candidate
-					if !opts.Verbose && ev.Candidate != nil {
-						durStr := ""
-						if ev.Candidate.Duration > 0 {
-							durStr = fmt.Sprintf(" [%s %s]", ev.Candidate.Source, formatDuration(ev.Candidate.Duration))
-						}
-						fmt.Printf("  - Selected: %q%s\n", ev.Candidate.Title, durStr)
-					}
-				case progress.EventComplete:
-					lastResult = ev.Result
-				case progress.EventError:
-					lastError = ev.Error
-				}
+			cmd.Stdout = &stdoutBuf
+			cmd.Stderr = &stderrBuf
+		}
 
-				if opts.ProgressReporter != nil {
-					_ = opts.ProgressReporter.Emit(ev)
-				}
-			})
+		cmdErr = cmd.Run()
 
-			args := append([]string{}, baseArgs...)
-			if sockErr == nil && sockServer != nil {
-				args = append(args, "--progress-target", sockTarget)
-			}
-
-			cmd := cmdutil.NewCommand(ctx, fetchTrackCmdName, args...)
-			if opts.Verbose || sockServer == nil {
-				cmd.Stdout = os.Stdout
-				cmd.Stderr = os.Stderr
-			} else {
-				cmd.Stdout = &stdoutBuf
-				cmd.Stderr = &stderrBuf
-			}
-
-			cmdErr = cmd.Run()
-
-			if sockServer != nil {
-				_ = sockServer.Close()
-			}
+		if sockServer != nil {
+			_ = sockServer.Close()
 		}
 
 		if cmdErr != nil {
@@ -436,6 +530,26 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 				fmt.Printf("  [ERROR] Failed to download track %q: %s\n", searchTarget, errMsg)
 			}
 			failureCount++
+
+			if opts.ProgressReporter != nil {
+				_ = opts.ProgressReporter.Emit(progress.Event{
+					Type:       progress.EventTrackComplete,
+					Phase:      "download",
+					Step:       trackNum,
+					TotalSteps: totalTracks,
+					Message:    fmt.Sprintf("Track failed [%02d/%02d]: %s - %s", trackNum, totalTracks, track.Artist, track.Title),
+					Error:      errMsg,
+					Track: &progress.TrackInfo{
+						Index:        trackNum,
+						TotalTracks:  totalTracks,
+						Artist:       track.Artist,
+						Title:        track.Title,
+						Timestamp:    track.Timestamp,
+						Status:       "failed",
+						ErrorMessage: errMsg,
+					},
+				})
+			}
 
 			if manifest != nil && i < len(manifest.Tracks) {
 				manifest.Tracks[i].Status = "failed"
@@ -483,6 +597,43 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 				fmt.Printf("  [OK] Completed: %s\n", finalFilename)
 			}
 
+			if opts.ProgressReporter != nil {
+				var gainPtr *float64
+				var dur float64
+				var hz int
+				var rating string
+				if lastResult != nil {
+					dur = lastResult.Duration
+					hz = lastResult.BandwidthHz
+					rating = lastResult.BandwidthRating
+					if lastResult.SuggestedGainDb != 0 {
+						g := lastResult.SuggestedGainDb
+						gainPtr = &g
+					}
+				}
+				_ = opts.ProgressReporter.Emit(progress.Event{
+					Type:       progress.EventTrackComplete,
+					Phase:      "download",
+					Step:       trackNum,
+					TotalSteps: totalTracks,
+					Message:    fmt.Sprintf("Track completed [%02d/%02d]: %s", trackNum, totalTracks, finalFilename),
+					Track: &progress.TrackInfo{
+						Index:           trackNum,
+						TotalTracks:     totalTracks,
+						Artist:          track.Artist,
+						Title:           track.Title,
+						Timestamp:       track.Timestamp,
+						ActualFile:      finalFilename,
+						Status:          "completed",
+						Duration:        dur,
+						BandwidthHz:     hz,
+						BandwidthRating: rating,
+						SuggestedGainDb: gainPtr,
+					},
+					Result: lastResult,
+				})
+			}
+
 			successCount++
 
 			if manifest != nil && i < len(manifest.Tracks) {
@@ -517,6 +668,23 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 		fmt.Printf("  Failed to generate playlist file: %v\n", err)
 	} else {
 		fmt.Printf("  Generated M3U playlist file: %s\n", generatedPlaylist)
+	}
+
+	if opts.ProgressReporter != nil {
+		_ = opts.ProgressReporter.Emit(progress.Event{
+			Type:    progress.EventComplete,
+			Phase:   "complete",
+			Message: fmt.Sprintf("Set download completed: %d downloaded, %d failed", successCount, failureCount),
+			Summary: &progress.MixSummaryInfo{
+				MixTitle:     opts.MixTitle,
+				TargetDir:    targetDir,
+				PlaylistPath: generatedPlaylist,
+				TotalTracks:  totalTracks,
+				Downloaded:   successCount,
+				Failed:       failureCount,
+				Skipped:      len(opts.SkippedItems),
+			},
+		})
 	}
 
 	if isAgent {

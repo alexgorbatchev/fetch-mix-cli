@@ -26,6 +26,7 @@ A command-line tool with AI agent support for bedroom and amateur DJs to find, e
 - Normalizes timestamp formats across the entire mix (automatically padding to `[hh:mm:ss]` if any track exceeds one hour).
 - Writes atomic state entries to `mix_manifest.json` on disk to ensure interrupted mix downloads resume seamlessly without re-downloading.
 - Generates `playlist.m3u` using sanitized local file names matching the exact set sequence.
+- Streams real-time NDJSON progress events over UNIX domain sockets, TCP, or file descriptors when executed by AI agents or supervisor orchestrators.
 
 # Prerequisites
 
@@ -66,9 +67,15 @@ fetch-mix youtube "https://www.youtube.com/watch?v=NeH3RpyocNc"
 
 # Inspect supported AI providers and models
 fetch-mix ai
+fetch-mix ai inspect openai
 
-# Check and auto-install external dependencies
+# Manage and verify external dependencies
+fetch-mix dependencies
 fetch-mix deps install
+fetch-mix deps update
+
+# Upgrade CLI binary in-place
+fetch-mix upgrade
 ```
 
 # Options & Flags
@@ -76,20 +83,30 @@ fetch-mix deps install
 | Flag | Short | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `--out-dir <path>` | `-o` | `cwd/{mix-title}` | Output directory where mix tracks are saved |
-| `--dry-run` | `-` | `false` | Preview tracklist and download plan without downloading |
-| `--auto-install` | `-` | `false` | Automatically install missing dependencies without prompting |
-| `--no-cache` | `-` | `false` | Disable local caching for search queries, tracklists, and comments |
+| `--dry-run` | | `false` | Preview tracklist and download plan without downloading |
+| `--auto-install` | | `false` | Automatically install missing dependencies without prompting |
+| `--no-cache` | | `false` | Disable local caching for search queries, tracklists, and comments |
 | `--llm-provider <name>` | `-p` | `auto` | LLM provider name (`auto`, `ollama`, `litellm`, `gemini`, `openai`, `anthropic`, `openrouter`, `deepseek`, `groq`, `custom`) |
 | `--llm-model <name>` | `-m` | `""` | LLM model name override |
 | `--sources <list>` | `-s` | `youtube,soundcloud` | Comma-separated search sources passed to fetch-track |
 | `--interactive` | `-i` | `false` | Interactively choose set search result |
-| `--progress-target <uri>` | `-` | `""` | Target URI for streaming NDJSON progress events |
-| `--progress-socket <path>` | `-` | `""` | Shorthand alias for `--progress-target` |
-| `--skip-verify` | `-` | `false` | Skip audio quality spectrum check in fetch-track |
-| `--skip-metadata` | `-` | `false` | Skip cover art and metadata tagging in fetch-track |
+| `--progress-target <uri>` | | `""` | Target URI for streaming NDJSON progress events |
+| `--progress-socket <path>` | | `""` | Shorthand alias for `--progress-target` |
+| `--skip-verify` | | `false` | Skip audio quality spectrum check in fetch-track |
+| `--skip-metadata` | | `false` | Skip cover art and metadata tagging in fetch-track |
 | `--verbose` | `-v` | `false` | Enable verbose diagnostic logging |
-| `--version` | `-` | `false` | Print version information and exit |
+| `--version` | | `false` | Print version information and exit |
 | `--help` | `-h` | `false` | Print command line help |
+
+# Progress & IPC Telemetry
+
+When executing `fetch-mix` from an AI agent or parent supervisor, stream NDJSON events over UNIX sockets, TCP, or file descriptors:
+
+```bash
+fetch-mix --progress-target "unix:///tmp/fm.sock" "Bicep Essential Mix 2014"
+```
+
+See [PROGRESS.md](PROGRESS.md) for full protocol specifications and event schemas.
 
 # License
 

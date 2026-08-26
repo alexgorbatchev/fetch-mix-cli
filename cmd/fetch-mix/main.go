@@ -500,6 +500,14 @@ func ensureDependencies(ctx context.Context) error {
 }
 
 func runMixPipeline(ctx context.Context, query string) error {
+	reporter, err := resolveProgressReporter(ctx)
+	if err != nil {
+		return fmt.Errorf("initializing progress reporter: %w", err)
+	}
+	if reporter != nil {
+		defer reporter.Close()
+	}
+
 	if !dryRun {
 		if err := ensureDependencies(ctx); err != nil {
 			return err
@@ -528,6 +536,13 @@ func runMixPipeline(ctx context.Context, query string) error {
 			URL:   query,
 		}
 	} else {
+		if reporter != nil {
+			_ = reporter.Emit(progress.Event{
+				Type:    progress.EventPhaseStart,
+				Phase:   "search",
+				Message: fmt.Sprintf("Searching for %q...", query),
+			})
+		}
 		fmt.Printf("Searching for %q...\n", query)
 		results, err := search.SearchSet(ctx, query)
 		if err != nil {
@@ -565,6 +580,13 @@ func runMixPipeline(ctx context.Context, query string) error {
 		}
 	}
 
+	if reporter != nil {
+		_ = reporter.Emit(progress.Event{
+			Type:    progress.EventPhaseStart,
+			Phase:   "scrape",
+			Message: fmt.Sprintf("Scraping tracklist from %s", chosenSet.URL),
+		})
+	}
 	fmt.Printf("\nScraping tracklist from: %s...\n", chosenSet.URL)
 	markdown, err := scraper.ScrapeSetWithCache(ctx, chosenSet.URL, noCache)
 	if err != nil {
@@ -579,6 +601,14 @@ func runMixPipeline(ctx context.Context, query string) error {
 		return fmt.Errorf("could not extract any tracks from the tracklist page")
 	}
 
+	if reporter != nil {
+		_ = reporter.Emit(progress.Event{
+			Type:    progress.EventProgress,
+			Phase:   "parse",
+			Message: fmt.Sprintf("Extracted %d tracks from tracklist", len(tracks)),
+		})
+	}
+
 	if !dryRun {
 		hasHours := downloader.HasHourTimestamps(tracks, skippedItems)
 		fmt.Printf("\nFound %d tracks:\n", len(tracks))
@@ -590,14 +620,6 @@ func runMixPipeline(ctx context.Context, query string) error {
 				fmt.Printf("  %s - %s\n", tr.Artist, tr.Title)
 			}
 		}
-	}
-
-	reporter, err := resolveProgressReporter(ctx)
-	if err != nil {
-		return fmt.Errorf("initializing progress reporter: %w", err)
-	}
-	if reporter != nil {
-		defer reporter.Close()
 	}
 
 	opts := downloader.DownloadOptions{
@@ -617,16 +639,40 @@ func runMixPipeline(ctx context.Context, query string) error {
 }
 
 func runYouTubePipeline(ctx context.Context, videoURL string) error {
+	reporter, err := resolveProgressReporter(ctx)
+	if err != nil {
+		return fmt.Errorf("initializing progress reporter: %w", err)
+	}
+	if reporter != nil {
+		defer reporter.Close()
+	}
+
 	if !dryRun {
 		if err := ensureDependencies(ctx); err != nil {
 			return err
 		}
 	}
 
+	if reporter != nil {
+		_ = reporter.Emit(progress.Event{
+			Type:    progress.EventPhaseStart,
+			Phase:   "youtube_comments",
+			Message: fmt.Sprintf("Processing YouTube video comments for %s", videoURL),
+		})
+	}
+
 	fmt.Printf("Processing YouTube video tracklist comments: %s...\n", videoURL)
 	tracks, skippedItems, videoTitle, err := youtube.ProcessYouTubeComments(ctx, videoURL, noCache, llmProvider, llmModel)
 	if err != nil {
 		return fmt.Errorf("YouTube comments extraction failed: %w", err)
+	}
+
+	if reporter != nil {
+		_ = reporter.Emit(progress.Event{
+			Type:    progress.EventProgress,
+			Phase:   "parse",
+			Message: fmt.Sprintf("Extracted %d tracks from YouTube comments", len(tracks)),
+		})
 	}
 
 	if !dryRun {
@@ -641,14 +687,6 @@ func runYouTubePipeline(ctx context.Context, videoURL string) error {
 				fmt.Printf("  %s - %s\n", tr.Artist, tr.Title)
 			}
 		}
-	}
-
-	reporter, err := resolveProgressReporter(ctx)
-	if err != nil {
-		return fmt.Errorf("initializing progress reporter: %w", err)
-	}
-	if reporter != nil {
-		defer reporter.Close()
 	}
 
 	opts := downloader.DownloadOptions{

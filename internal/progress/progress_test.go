@@ -320,6 +320,116 @@ func TestNewReporter_StdoutStderr(t *testing.T) {
 	_ = rStderr.Close()
 }
 
+func TestProgressReporter_MixEvents(t *testing.T) {
+	sockPath := filepath.Join(os.TempDir(), fmt.Sprintf("test_mix_rep_%d.sock", time.Now().UnixNano()))
+	defer os.Remove(sockPath)
+
+	listener, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatalf("net.Listen failed: %v", err)
+	}
+	defer listener.Close()
+
+	var receivedEvents []progress.Event
+	var mu sync.Mutex
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+
+		decoder := progress.NewDecoder(conn)
+		for {
+			var ev progress.Event
+			if err := decoder.Decode(&ev); err != nil {
+				break
+			}
+			mu.Lock()
+			receivedEvents = append(receivedEvents, ev)
+			mu.Unlock()
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	reporter, err := progress.NewReporter(ctx, sockPath)
+	if err != nil {
+		t.Fatalf("NewReporter failed: %v", err)
+	}
+
+	gain := -1.5
+	_ = reporter.Emit(progress.Event{
+		Type:       progress.EventTrackStart,
+		Phase:      "download",
+		Step:       1,
+		TotalSteps: 2,
+		Track: &progress.TrackInfo{
+			Index:       1,
+			TotalTracks: 2,
+			Artist:      "Artist 1",
+			Title:       "Track 1",
+			Status:      "pending",
+		},
+	})
+
+	_ = reporter.Emit(progress.Event{
+		Type:       progress.EventTrackComplete,
+		Phase:      "download",
+		Step:       1,
+		TotalSteps: 2,
+		Track: &progress.TrackInfo{
+			Index:           1,
+			TotalTracks:     2,
+			Artist:          "Artist 1",
+			Title:           "Track 1",
+			ActualFile:      "01 - Artist 1 - Track 1.m4a",
+			Status:          "completed",
+			Duration:        300,
+			BandwidthHz:     20000,
+			BandwidthRating: "High Fidelity",
+			SuggestedGainDb: &gain,
+		},
+	})
+
+	_ = reporter.Emit(progress.Event{
+		Type:    progress.EventComplete,
+		Phase:   "complete",
+		Message: "Mix download complete",
+		Summary: &progress.MixSummaryInfo{
+			MixTitle:     "Test Mix",
+			TargetDir:    "Test Mix",
+			PlaylistPath: "Test Mix/playlist.m3u",
+			TotalTracks:  2,
+			Downloaded:   2,
+			Failed:       0,
+		},
+	})
+
+	_ = reporter.Close()
+	<-done
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	if len(receivedEvents) != 3 {
+		t.Fatalf("expected 3 events, got %d", len(receivedEvents))
+	}
+	if receivedEvents[0].Type != progress.EventTrackStart || receivedEvents[0].Track.Artist != "Artist 1" {
+		t.Errorf("unexpected event 0: %+v", receivedEvents[0])
+	}
+	if receivedEvents[1].Type != progress.EventTrackComplete || receivedEvents[1].Track.ActualFile != "01 - Artist 1 - Track 1.m4a" {
+		t.Errorf("unexpected event 1: %+v", receivedEvents[1])
+	}
+	if receivedEvents[2].Type != progress.EventComplete || receivedEvents[2].Summary.Downloaded != 2 {
+		t.Errorf("unexpected event 2: %+v", receivedEvents[2])
+	}
+}
+
 func TestNewReporter_Errors(t *testing.T) {
 	ctx := context.Background()
 

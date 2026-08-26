@@ -2,12 +2,15 @@ package downloader
 
 import (
 	"context"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
+	"github.com/alexgorbatchev/fetch-mix-cli/internal/progress"
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/types"
 )
 
@@ -282,4 +285,52 @@ func main() {
 	canceledCtx, cancel := context.WithCancel(context.Background())
 	cancel()
 	_ = DownloadSet(canceledCtx, opts)
+
+	// 6. Progress reporting with live socket
+	sockPath := filepath.Join(tempDir, "mix_prog.sock")
+	listener, err := net.Listen("unix", sockPath)
+	if err == nil && listener != nil {
+		defer listener.Close()
+		var events []progress.Event
+		var mu sync.Mutex
+		done := make(chan struct{})
+
+		go func() {
+			defer close(done)
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			defer conn.Close()
+			dec := progress.NewDecoder(conn)
+			for {
+				var ev progress.Event
+				if err := dec.Decode(&ev); err != nil {
+					break
+				}
+				mu.Lock()
+				events = append(events, ev)
+				mu.Unlock()
+			}
+		}()
+
+		reporter, repErr := progress.NewReporter(ctx, sockPath)
+		if repErr == nil && reporter != nil {
+			progOpts := DownloadOptions{
+				MixTitle:         "Progress Set",
+				OutputDir:        filepath.Join(tempDir, "prog_out"),
+				Tracks:           []types.Track{{Artist: "Artist", Title: "Track 1"}},
+				ProgressReporter: reporter,
+			}
+			_ = DownloadSet(ctx, progOpts)
+			_ = reporter.Close()
+			<-done
+
+			mu.Lock()
+			if len(events) == 0 {
+				t.Errorf("expected progress events over socket, got none")
+			}
+			mu.Unlock()
+		}
+	}
 }
