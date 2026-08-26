@@ -33,24 +33,16 @@ A command-line tool with AI agent support for bedroom and amateur DJs to find, e
 - [`fetch-track`](https://github.com/alexgorbatchev/fetch-track-cli) (version 1.4.0 or newer) - Single-track acquisition engine.
 - [`yt-dlp`](https://github.com/yt-dlp/yt-dlp#installation) (version 2024.08.01 or newer) - YouTube comment and metadata extractor.
 - [`ffmpeg`](https://ffmpeg.org/download.html) (version 4.4 or newer) - Audio stream processing and transcoding.
-- [GitHub CLI (`gh`)](https://cli.github.com/) - Recommended for downloading release binaries.
 
 # Installation
 
-Download the latest prebuilt binary from GitHub Releases:
+Download the prebuilt archive for your platform from [GitHub Releases](https://github.com/alexgorbatchev/fetch-mix-cli/releases/latest), extract the `fetch-mix` binary, and place it in your `$PATH`:
 
 ```bash
-# Using GitHub CLI
-gh release download --repo alexgorbatchev/fetch-mix-cli --pattern 'fetch-mix-darwin-arm64' --output fetch-mix
+# Example for macOS (Apple Silicon):
+curl -sSL "https://github.com/alexgorbatchev/fetch-mix-cli/releases/latest/download/fetch-mix_darwin_arm64.tar.gz" | tar -xz
 chmod +x fetch-mix
 mv fetch-mix ~/.local/bin/
-```
-
-Or via direct download:
-
-```bash
-curl -sSL https://github.com/alexgorbatchev/fetch-mix-cli/releases/latest/download/fetch-mix-darwin-arm64 -o ~/.local/bin/fetch-mix
-chmod +x ~/.local/bin/fetch-mix
 ```
 
 # Quick Start

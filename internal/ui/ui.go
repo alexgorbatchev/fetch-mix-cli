@@ -4,7 +4,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/alexgorbatchev/fetch-mix-cli/internal/deps"
+	"github.com/alexgorbatchev/godeps"
 	"golang.org/x/term"
 )
 
@@ -19,7 +19,7 @@ var (
 // In non-agent mode (agent=0) with an active TTY, it expands dynamically to terminal width (clamped to 120 max).
 // In agent mode (agent=1), divider lines are prohibited and it returns an empty string.
 func Separator(char string, defaultWidth int) string {
-	if deps.IsAgentMode() {
+	if godeps.IsAgentMode() {
 		return ""
 	}
 

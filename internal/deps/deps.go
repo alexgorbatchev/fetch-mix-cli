@@ -12,7 +12,6 @@ type DependencyReport = godeps.DependencyReport
 type CommandRunner = godeps.CommandRunner
 
 var DefaultRunner = godeps.DefaultRunner
-var IsAgentMode = godeps.IsAgentMode
 
 var RequiredDependencies = []Dependency{
 	{

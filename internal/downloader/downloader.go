@@ -12,10 +12,10 @@ import (
 	"time"
 
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/cmdutil"
-	"github.com/alexgorbatchev/fetch-mix-cli/internal/deps"
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/progress"
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/types"
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/ui"
+	"github.com/alexgorbatchev/godeps"
 )
 
 type DownloadOptions struct {
@@ -242,7 +242,7 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 			})
 		}
 
-		if isAgent := deps.IsAgentMode(); isAgent {
+		if isAgent := godeps.IsAgentMode(); isAgent {
 			fmt.Printf("status: dry_run\ntarget_dir: %s\nplaylist: %s\ntotal_tracks: %d\n", targetDir, playlistPath, totalTracks)
 			for i, track := range opts.Tracks {
 				ts := NormalizeTimestamp(track.Timestamp, hasHours)
@@ -326,7 +326,7 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 
 	successCount := 0
 	failureCount := 0
-	isAgent := deps.IsAgentMode()
+	isAgent := godeps.IsAgentMode()
 
 	if opts.ProgressReporter != nil {
 		_ = opts.ProgressReporter.Emit(progress.Event{

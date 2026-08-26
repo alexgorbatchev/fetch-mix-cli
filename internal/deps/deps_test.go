@@ -3,36 +3,11 @@ package deps
 import (
 	"context"
 	"errors"
-	"os"
 	"os/exec"
 	"testing"
 
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/cache"
 )
-
-func TestIsAgentMode(t *testing.T) {
-	os.Unsetenv("AGENT")
-	if IsAgentMode() {
-		t.Errorf("IsAgentMode() = true, want false when AGENT is unset")
-	}
-
-	os.Setenv("AGENT", "1")
-	if !IsAgentMode() {
-		t.Errorf("IsAgentMode() = false, want true when AGENT=1")
-	}
-
-	os.Setenv("AGENT", "true")
-	if !IsAgentMode() {
-		t.Errorf("IsAgentMode() = false, want true when AGENT=true")
-	}
-
-	os.Setenv("AGENT", "0")
-	if IsAgentMode() {
-		t.Errorf("IsAgentMode() = true, want false when AGENT=0")
-	}
-
-	os.Unsetenv("AGENT")
-}
 
 func TestDependencyReport_Summary(t *testing.T) {
 	tests := []struct {

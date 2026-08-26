@@ -9,7 +9,7 @@ var techCatalog = cobrahelptree.TechCatalog{
 	"fetch-mix": {
 		Summary:     "Fetch, extract, and download entire DJ mix tracklists using fetch-track CLI",
 		Description: "Searches MixesDB, crawlable web mirrors, 1001tracklists, or YouTube comments (via multi-provider LLMs), parses tracklists deterministically, and downloads individual tracks using fetch-track CLI.",
-		Args:        "[set_title_or_url]",
+		Args:        "[url|query]",
 	},
 	"fetch-mix ai": {
 		Summary:     "Manage and inspect AI / LLM configuration",

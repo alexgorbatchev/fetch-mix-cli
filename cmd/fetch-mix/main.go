@@ -80,7 +80,7 @@ func execute(ctx context.Context) error {
 
 func newRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:          "fetch-mix <set_title_or_url>",
+		Use:          "fetch-mix <url|query>",
 		Short:        "Fetch, extract, and download entire DJ mix tracklists using fetch-track CLI",
 		Version:      version,
 		SilenceUsage: true,
@@ -195,7 +195,7 @@ func newAICmd() *cobra.Command {
 
 func runAIList(cmd *cobra.Command) error {
 	statuses := llm.GetProviderStatuses()
-	if deps.IsAgentMode() {
+	if godeps.IsAgentMode() {
 		for _, s := range statuses {
 			fmt.Printf("%s\t%s\t%s\t%s\n", s.ID, s.DefaultModel, s.EnvVar, s.Status)
 		}
@@ -254,7 +254,7 @@ func runAIInspect(cmd *cobra.Command, providerName string) error {
 		return fmt.Errorf("unknown provider %q (supported: %s)", providerName, strings.Join(validIDs, ", "))
 	}
 
-	if deps.IsAgentMode() {
+	if godeps.IsAgentMode() {
 		fmt.Printf("provider: %s\nname: %s\ndefault_model: %s\nenv_var: %s\nstatus: %s\n",
 			found.ID, found.Name, found.DefaultModel, found.EnvVar, found.Status)
 		return nil
@@ -326,7 +326,7 @@ func newDepsCmd() *cobra.Command {
 }
 
 func runDepsVerify(cmd *cobra.Command) error {
-	isAgent := deps.IsAgentMode()
+	isAgent := godeps.IsAgentMode()
 	reports, err := deps.VerifyDependencies(cmd.Context())
 
 	if isAgent {
@@ -366,7 +366,7 @@ func runDepsVerify(cmd *cobra.Command) error {
 
 func runDepsInstall(cmd *cobra.Command, args []string) error {
 	_ = deps.InitManagedPath()
-	isAgent := deps.IsAgentMode()
+	isAgent := godeps.IsAgentMode()
 	if len(args) > 0 {
 		for _, depName := range args {
 			if !isAgent {
@@ -411,7 +411,7 @@ func runDepsInstall(cmd *cobra.Command, args []string) error {
 
 func runDepsUpdate(cmd *cobra.Command, args []string) error {
 	_ = deps.InitManagedPath()
-	isAgent := deps.IsAgentMode()
+	isAgent := godeps.IsAgentMode()
 	if len(args) > 0 {
 		for _, depName := range args {
 			if !isAgent {
@@ -453,7 +453,7 @@ func newUpgradeCmd() *cobra.Command {
 		Short:        "Upgrade fetch-mix binary to latest release",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			isAgent := deps.IsAgentMode()
+			isAgent := godeps.IsAgentMode()
 			if !isAgent {
 				fmt.Printf("Checking for newer fetch-mix release (current version: %s)...\n", version)
 			}
@@ -562,7 +562,7 @@ func runMixPipeline(ctx context.Context, query string) error {
 				fmt.Printf("  [%d] %s\n", i+1, r.Title)
 			}
 
-			if interactive && !deps.IsAgentMode() {
+			if interactive && !godeps.IsAgentMode() {
 				reader := bufio.NewReader(os.Stdin)
 				fmt.Printf("Choose option (1-%d) [1]: ", len(results))
 				choiceStr, _ := reader.ReadString('\n')
