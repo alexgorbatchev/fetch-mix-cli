@@ -9,7 +9,7 @@ var techCatalog = cobrahelptree.TechCatalog{
 	"fetch-mix": {
 		Summary:     "Fetch, extract, and download entire DJ mix tracklists using fetch-track CLI",
 		Description: "Searches MixesDB, crawlable web mirrors, 1001tracklists, or YouTube comments (via multi-provider LLMs), parses tracklists deterministically, and downloads individual tracks using fetch-track CLI.",
-		Args:        "[url|query]",
+		Args:        "<url|query>",
 	},
 	"fetch-mix ai": {
 		Summary:     "Manage and inspect AI / LLM configuration",
@@ -45,7 +45,7 @@ var techCatalog = cobrahelptree.TechCatalog{
 	"fetch-mix youtube": {
 		Summary:     "Extract tracklist from YouTube comments and download",
 		Description: "Fetches top comments from YouTube video via yt-dlp, filters candidates, parses tracklists via LLM, and downloads audio.",
-		Args:        "[url|id]",
+		Args:        "<url|id>",
 	},
 	"fetch-mix upgrade": {
 		Summary:     "Upgrade fetch-mix binary to latest release",
@@ -54,7 +54,16 @@ var techCatalog = cobrahelptree.TechCatalog{
 }
 
 func setupHelp(cmd *cobra.Command) {
-	cobrahelptree.Setup(cmd, cobrahelptree.TreeOptions{
+	opts := cobrahelptree.TreeOptions{
 		TechCatalog: techCatalog,
+	}
+	cobrahelptree.Setup(cmd, opts)
+	cmd.SetUsageFunc(func(c *cobra.Command) error {
+		if !opts.DisableAgent && cobrahelptree.IsAgentMode() {
+			c.Print(cobrahelptree.RenderAgentHelp(c, opts.TechCatalog))
+			return nil
+		}
+		c.Print(cobrahelptree.RenderTreeHelp(c, opts))
+		return nil
 	})
 }

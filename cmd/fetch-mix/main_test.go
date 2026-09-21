@@ -66,6 +66,12 @@ func TestCLI_Subcommands(t *testing.T) {
 	}
 
 	cmd = newRootCmd()
+	cmd.SetArgs([]string{"ai", "inspect"})
+	if err := cmd.ExecuteContext(ctx); err != nil {
+		t.Fatalf("ai inspect without args failed: %v", err)
+	}
+
+	cmd = newRootCmd()
 	cmd.SetArgs([]string{"ai", "inspect", "openai"})
 	if err := cmd.ExecuteContext(ctx); err != nil {
 		t.Fatalf("ai inspect openai failed: %v", err)

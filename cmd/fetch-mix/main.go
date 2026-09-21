@@ -182,8 +182,11 @@ func newAICmd() *cobra.Command {
 		Aliases:      []string{"show", "get"},
 		Short:        "Inspect configuration and status of an LLM provider",
 		SilenceUsage: true,
-		Args:         cobra.ExactArgs(1),
+		Args:         cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return cmd.Help()
+			}
 			return runAIInspect(cmd, args[0])
 		},
 	}
