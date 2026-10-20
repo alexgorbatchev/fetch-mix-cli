@@ -31,6 +31,7 @@ A command-line tool with AI agent support for bedroom and amateur DJs to find, e
 - Generates `playlist.m3u` using sanitized local file names matching the exact set sequence.
 - Streams real-time NDJSON progress events over UNIX domain sockets, TCP, or file descriptors when executed by AI agents or supervisor orchestrators.
 - With `--json`, writes one result to stdout and diagnostics to stderr. Mix results include the source URL and ordered track statuses, output files, and errors; `--dry-run` returns a `preview` without downloading audio. Failed downloads remain visible in a `partial` result.
+- Missing targets, invalid candidate URLs or providers, dependency failures, and extraction or progress initialization errors return a JSON error result and a nonzero exit status. A failed download keeps its existing result without appending another JSON document.
 
 # Prerequisites
 

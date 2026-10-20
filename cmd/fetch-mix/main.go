@@ -99,13 +99,16 @@ parses tracklists deterministically, and downloads individual tracks using fetch
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
+				if jsonOutput {
+					return writeJSONFailure(fmt.Errorf("a target is required"))
+				}
 				return cmd.Help()
 			}
 
 			targetQuery := strings.TrimSpace(strings.Join(args, " "))
 			if candidateURL != "" {
 				if err := validateCandidateURL(candidateURL); err != nil {
-					return err
+					return writeJSONFailure(err)
 				}
 				targetQuery = candidateURL
 			}
@@ -163,6 +166,9 @@ func newYouTubeCmd() *cobra.Command {
 		Args:         cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
+				if jsonOutput {
+					return writeJSONFailure(fmt.Errorf("a target is required"))
+				}
 				return cmd.Help()
 			}
 
@@ -204,6 +210,9 @@ func newAICmd() *cobra.Command {
 		Args:         cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
+				if jsonOutput {
+					return writeJSONFailure(fmt.Errorf("a target is required"))
+				}
 				return cmd.Help()
 			}
 			return runAIInspect(cmd, args[0])
@@ -278,7 +287,7 @@ func runAIInspect(cmd *cobra.Command, providerName string) error {
 		for _, s := range statuses {
 			validIDs = append(validIDs, s.ID)
 		}
-		return fmt.Errorf("unknown provider %q (supported: %s)", providerName, strings.Join(validIDs, ", "))
+		return writeJSONFailure(fmt.Errorf("unknown provider %q (supported: %s)", providerName, strings.Join(validIDs, ", ")))
 	}
 
 	if jsonOutput {
@@ -555,7 +564,8 @@ func ensureDependencies(ctx context.Context) error {
 	})
 }
 
-func runMixPipeline(ctx context.Context, query string) error {
+func runMixPipeline(ctx context.Context, query string) (runErr error) {
+	defer func() { runErr = writeJSONFailure(runErr) }()
 	if candidateURL != "" {
 		if err := validateCandidateURL(candidateURL); err != nil {
 			return err
@@ -706,7 +716,8 @@ func runMixPipeline(ctx context.Context, query string) error {
 	return finishMix(ctx, opts, chosenSet.URL)
 }
 
-func runYouTubePipeline(ctx context.Context, videoURL string) error {
+func runYouTubePipeline(ctx context.Context, videoURL string) (runErr error) {
+	defer func() { runErr = writeJSONFailure(runErr) }()
 	if candidateURL != "" {
 		if err := validateCandidateURL(candidateURL); err != nil {
 			return err
@@ -848,8 +859,5 @@ func finishMix(ctx context.Context, opts downloader.DownloadOptions, sourceURL s
 		}
 		result.Tracks = append(result.Tracks, mixTrackResult{Index: entry.Index, Artist: entry.Artist, Title: entry.Title, Timestamp: entry.Timestamp, Status: entry.Status, OutputFile: file, Error: entry.ErrorMessage})
 	}
-	if writeErr := json.NewEncoder(resultWriter).Encode(result); writeErr != nil {
-		return writeErr
-	}
-	return err
+	return writeJSONResult(result, err)
 }

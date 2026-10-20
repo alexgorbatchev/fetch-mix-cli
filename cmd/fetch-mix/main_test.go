@@ -89,9 +89,9 @@ func TestCLI_Subcommands(t *testing.T) {
 	t.Setenv("XDG_CACHE_HOME", tempDir)
 	c, _ := cache.New()
 	if c != nil {
-		_ = c.Put("deps_fetch-track.json", "2.0.0")
-		_ = c.Put("deps_yt-dlp.json", "2025.01.01")
-		_ = c.Put("deps_ffmpeg.json", "ffmpeg version 6.0")
+		_ = c.Put("godeps_fetch-track.json", "2.0.0")
+		_ = c.Put("godeps_yt-dlp.json", "2025.01.01")
+		_ = c.Put("godeps_ffmpeg.json", "ffmpeg version 6.0")
 	}
 
 	// Non-agent mode
@@ -203,9 +203,9 @@ func TestCLI_RunYouTubePipeline(t *testing.T) {
 				{"artist": "Artist 1", "title": "Track 1", "timestamp": "00:00"},
 			},
 		})
-		_ = c.Put("deps_fetch-track.json", "2.0.0")
-		_ = c.Put("deps_yt-dlp.json", "2025.01.01")
-		_ = c.Put("deps_ffmpeg.json", "ffmpeg version 6.0")
+		_ = c.Put("godeps_fetch-track.json", "2.0.0")
+		_ = c.Put("godeps_yt-dlp.json", "2025.01.01")
+		_ = c.Put("godeps_ffmpeg.json", "ffmpeg version 6.0")
 	}
 
 	ctx := context.Background()
@@ -244,9 +244,9 @@ func TestCLI_RunMixPipeline_DirectURL(t *testing.T) {
 	// Pre-populate dependencies in cache
 	c, _ := cache.New()
 	if c != nil {
-		_ = c.Put("deps_fetch-track.json", "2.0.0")
-		_ = c.Put("deps_yt-dlp.json", "2025.01.01")
-		_ = c.Put("deps_ffmpeg.json", "ffmpeg version 6.0")
+		_ = c.Put("godeps_fetch-track.json", "2.0.0")
+		_ = c.Put("godeps_yt-dlp.json", "2025.01.01")
+		_ = c.Put("godeps_ffmpeg.json", "ffmpeg version 6.0")
 	}
 
 	// Mock web page server
@@ -602,11 +602,11 @@ func TestCLI_RunPipelines_FullSuccess(t *testing.T) {
 	// Pre-populate dependencies in cache
 	c, _ := cache.New()
 	if c != nil {
-		_ = c.Put("deps_fetch-track.json", "2.0.0")
-		_ = c.Put("deps_yt-dlp.json", "2025.01.01")
-		_ = c.Put("deps_ffmpeg.json", "ffmpeg version 6.0")
-		_ = c.Put("yt_tracks_fullsuccessid.json", map[string]interface{}{
-			"videoId":    "fullsuccessid",
+		_ = c.Put("godeps_fetch-track.json", "2.0.0")
+		_ = c.Put("godeps_yt-dlp.json", "2025.01.01")
+		_ = c.Put("godeps_ffmpeg.json", "ffmpeg version 6.0")
+		_ = c.Put("yt_tracks_fullsuccess.json", map[string]interface{}{
+			"videoId":    "fullsuccess",
 			"videoTitle": "Full Success Video",
 			"tracks": []map[string]string{
 				{"artist": "Artist 1", "title": "Track 1", "timestamp": "01:05:00"},
@@ -626,7 +626,7 @@ func TestCLI_RunPipelines_FullSuccess(t *testing.T) {
 	// 1. YouTube non-dry-run full success
 	dryRun = false
 	outDir = filepath.Join(tempDir, "yt_success_out")
-	_ = runYouTubePipeline(ctx, "fullsuccessid")
+	_ = runYouTubePipeline(ctx, "fullsuccess")
 
 	// 2. Mix non-dry-run full success
 	outDir = filepath.Join(tempDir, "mix_success_out")
@@ -664,11 +664,11 @@ func TestCLI_NoArgs_HelpScreen(t *testing.T) {
 	t.Setenv("XDG_CACHE_HOME", tempDir)
 	c, _ := cache.New()
 	if c != nil {
-		_ = c.Put("deps_fetch-track.json", "2.0.0")
-		_ = c.Put("deps_yt-dlp.json", "2025.01.01")
-		_ = c.Put("deps_ffmpeg.json", "ffmpeg version 6.0")
-		_ = c.Put("yt_tracks_promptsuccess.json", map[string]interface{}{
-			"videoId":    "promptsuccess",
+		_ = c.Put("godeps_fetch-track.json", "2.0.0")
+		_ = c.Put("godeps_yt-dlp.json", "2025.01.01")
+		_ = c.Put("godeps_ffmpeg.json", "ffmpeg version 6.0")
+		_ = c.Put("yt_tracks_prompt_okid.json", map[string]interface{}{
+			"videoId":    "prompt_okid",
 			"videoTitle": "Prompt Video Title",
 			"tracks": []map[string]string{
 				{"artist": "Artist 1", "title": "Track 1", "timestamp": "00:00"},
@@ -677,7 +677,7 @@ func TestCLI_NoArgs_HelpScreen(t *testing.T) {
 	}
 
 	cmd = newRootCmd()
-	cmd.SetArgs([]string{"youtube", "--dry-run", "-p", "custom", "promptsuccess"})
+	cmd.SetArgs([]string{"youtube", "--dry-run", "-p", "custom", "prompt_okid"})
 	_ = cmd.ExecuteContext(ctx)
 }
 
