@@ -8,40 +8,40 @@ default:
 
 # Build the fetch-mix binary in bin/
 build:
-	mkdir -p bin
-	go build -o bin/fetch-mix ./cmd/fetch-mix
+    mkdir -p bin
+    go build -o bin/fetch-mix ./cmd/fetch-mix
 
 # Install fetch-mix binary to GOPATH bin directory
 install:
-	go install ./cmd/fetch-mix
+    go install ./cmd/fetch-mix
 
 # Run in human-facing interactive mode
 run *ARGS:
-	go run ./cmd/fetch-mix {{ARGS}}
+    go run ./cmd/fetch-mix {{ ARGS }}
 
 # Run in agent-facing token-conservative mode
 run-ai *ARGS:
-	AGENT=1 go run ./cmd/fetch-mix {{ARGS}}
+    AGENT=1 go run ./cmd/fetch-mix {{ ARGS }}
 
 # Run YouTube comment tracklist extraction pipeline
 youtube *ARGS:
-	go run ./cmd/fetch-mix youtube {{ARGS}}
+    go run ./cmd/fetch-mix youtube {{ ARGS }}
 
 # Run out-of-band progress socket demo
 demo-progress *ARGS:
-	./scripts/demo-progress-socket.sh {{ARGS}}
+    ./scripts/demo-progress-socket.sh {{ ARGS }}
 
 # Run all unit tests
 test:
-	go test -v ./...
+    go test -v ./...
 
 # Format Go code
 fmt:
-	go fmt ./...
+    go fmt ./...
 
 # Run static code analysis
 vet:
-	go vet ./...
+    go vet ./...
 
 # Run linters and code formatting checks
 lint: fmt vet
@@ -51,4 +51,8 @@ check: lint test
 
 # Clean up build binaries and temporary files
 clean:
-	rm -rf bin fetch-mix coverage.out .tmp dist
+    rm -rf bin fetch-mix coverage.out .tmp dist
+
+# Download project dependencies for local development
+setup:
+    go mod download
