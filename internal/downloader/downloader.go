@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -19,6 +20,8 @@ import (
 )
 
 type DownloadOptions struct {
+	Output           io.Writer
+	Result           *MixManifest
 	MixTitle         string
 	Tracks           []types.Track
 	SkippedItems     []types.SkippedItem
@@ -182,6 +185,10 @@ func GenerateM3UPlaylist(targetDir, mixTitle string, tracks []types.Track, manif
 
 // DownloadSet downloads tracks in a set using fetch-track CLI as dependency.
 func DownloadSet(ctx context.Context, opts DownloadOptions) error {
+	output := opts.Output
+	if output == nil {
+		output = os.Stdout
+	}
 	safeMixTitle := SanitizeFilename(opts.MixTitle)
 	if safeMixTitle == "" {
 		safeMixTitle = "Downloaded DJ Set"
@@ -199,6 +206,14 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 	hasHours := HasHourTimestamps(opts.Tracks, opts.SkippedItems)
 
 	if opts.DryRun {
+		if opts.Result != nil {
+			opts.Result.MixTitle = opts.MixTitle
+			opts.Result.TargetDir = targetDir
+			opts.Result.Skipped = opts.SkippedItems
+			for i, tr := range opts.Tracks {
+				opts.Result.Tracks = append(opts.Result.Tracks, TrackManifestEntry{Index: i + 1, Artist: tr.Artist, Title: tr.Title, Timestamp: tr.Timestamp, RawString: tr.RawString, Status: "planned"})
+			}
+		}
 		if opts.ProgressReporter != nil {
 			_ = opts.ProgressReporter.Emit(progress.Event{
 				Type:    progress.EventPhaseStart,
@@ -243,32 +258,32 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 		}
 
 		if isAgent := godeps.IsAgentMode(); isAgent {
-			fmt.Printf("status: dry_run\ntarget_dir: %s\nplaylist: %s\ntotal_tracks: %d\n", targetDir, playlistPath, totalTracks)
+			fmt.Fprintf(output, "status: dry_run\ntarget_dir: %s\nplaylist: %s\ntotal_tracks: %d\n", targetDir, playlistPath, totalTracks)
 			for i, track := range opts.Tracks {
 				ts := NormalizeTimestamp(track.Timestamp, hasHours)
 				tsPart := ""
 				if ts != "" {
 					tsPart = fmt.Sprintf("\ttimestamp:%s", ts)
 				}
-				fmt.Printf("index:%02d\tartist:%s\ttitle:%s%s\n", i+1, track.Artist, track.Title, tsPart)
+				fmt.Fprintf(output, "index:%02d\tartist:%s\ttitle:%s%s\n", i+1, track.Artist, track.Title, tsPart)
 			}
 			return nil
 		}
 
 		if sep != "" {
-			fmt.Printf("\n%s\n", sep)
+			fmt.Fprintf(output, "\n%s\n", sep)
 		}
-		fmt.Println("DRY RUN PREVIEW - No files will be downloaded")
+		fmt.Fprintln(output, "DRY RUN PREVIEW - No files will be downloaded")
 		if sep != "" {
-			fmt.Printf("%s\n", sep)
+			fmt.Fprintf(output, "%s\n", sep)
 		}
-		fmt.Printf("Target Directory  : %s/\n", targetDir)
-		fmt.Printf("Playlist File     : %s\n", playlistPath)
-		fmt.Printf("Total Tracks      : %d\n", totalTracks)
+		fmt.Fprintf(output, "Target Directory  : %s/\n", targetDir)
+		fmt.Fprintf(output, "Playlist File     : %s\n", playlistPath)
+		fmt.Fprintf(output, "Total Tracks      : %d\n", totalTracks)
 		if opts.Sources != "" {
-			fmt.Printf("Sources           : %s\n", opts.Sources)
+			fmt.Fprintf(output, "Sources           : %s\n", opts.Sources)
 		}
-		fmt.Println("\nPlanned Track Downloads:")
+		fmt.Fprintln(output, "\nPlanned Track Downloads:")
 
 		for i, track := range opts.Tracks {
 			trackNum := i + 1
@@ -278,14 +293,14 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 
 			ts := NormalizeTimestamp(track.Timestamp, hasHours)
 			if ts != "" {
-				fmt.Printf("  [%s] %s\n", ts, trackTarget)
+				fmt.Fprintf(output, "  [%s] %s\n", ts, trackTarget)
 			} else {
-				fmt.Printf("  %s\n", trackTarget)
+				fmt.Fprintf(output, "  %s\n", trackTarget)
 			}
 		}
 
 		if len(opts.SkippedItems) > 0 {
-			fmt.Printf("\nSkipped / Non-Track Items (%d):\n", len(opts.SkippedItems))
+			fmt.Fprintf(output, "\nSkipped / Non-Track Items (%d):\n", len(opts.SkippedItems))
 			for _, item := range opts.SkippedItems {
 				tsStr := NormalizeTimestamp(item.Timestamp, hasHours)
 				ts := ""
@@ -296,17 +311,17 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 				if item.Reason != "" {
 					reason = fmt.Sprintf(" (%s)", item.Reason)
 				}
-				fmt.Printf("  - %s%s%s\n", ts, item.RawText, reason)
+				fmt.Fprintf(output, "  - %s%s%s\n", ts, item.RawText, reason)
 			}
 		}
 
 		if sep != "" {
-			fmt.Printf("\n%s\n", sep)
+			fmt.Fprintf(output, "\n%s\n", sep)
 		}
-		fmt.Printf("Playlist file preview: %s (%d tracks in mix order)\n", playlistPath, totalTracks)
-		fmt.Println("[DRY RUN COMPLETE] Plan verified. No downloads performed.")
+		fmt.Fprintf(output, "Playlist file preview: %s (%d tracks in mix order)\n", playlistPath, totalTracks)
+		fmt.Fprintln(output, "[DRY RUN COMPLETE] Plan verified. No downloads performed.")
 		if sep != "" {
-			fmt.Printf("%s\n", sep)
+			fmt.Fprintf(output, "%s\n", sep)
 		}
 		return nil
 	}
@@ -318,11 +333,15 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 	// Load or create MixManifest for pause & resume capability
 	manifest, manifestErr := LoadOrCreateManifest(targetDir, opts.MixTitle, opts.Tracks, opts.SkippedItems)
 	if manifestErr != nil {
-		fmt.Printf("Warning: failed to initialize mix manifest: %v\n", manifestErr)
+		return manifestErr
+	}
+	if opts.Result != nil {
+		*opts.Result = *manifest
+		manifest = opts.Result
 	}
 
-	fmt.Printf("\nOutput Directory: %s\n", targetDir)
-	fmt.Printf("Starting sequential track downloads via fetch-track CLI...\n")
+	fmt.Fprintf(output, "\nOutput Directory: %s\n", targetDir)
+	fmt.Fprintf(output, "Starting sequential track downloads via fetch-track CLI...\n")
 
 	successCount := 0
 	failureCount := 0
@@ -348,7 +367,7 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 		trackNum := i + 1
 
 		if !isAgent && sep != "" {
-			fmt.Println(sep)
+			fmt.Fprintln(output, sep)
 		}
 
 		// Pause & Resume check: skip already completed tracks
@@ -357,7 +376,7 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 			if entry.Status == "completed" && entry.ActualFile != "" {
 				fileOnDisk := filepath.Join(targetDir, entry.ActualFile)
 				if fi, err := os.Stat(fileOnDisk); err == nil && fi.Size() > 0 {
-					fmt.Printf("[%02d/%02d] Skipping already downloaded track: %s\n", trackNum, totalTracks, entry.ActualFile)
+					fmt.Fprintf(output, "[%02d/%02d] Skipping already downloaded track: %s\n", trackNum, totalTracks, entry.ActualFile)
 					if opts.ProgressReporter != nil {
 						_ = opts.ProgressReporter.Emit(progress.Event{
 							Type:       progress.EventTrackComplete,
@@ -393,7 +412,7 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 			timestampInfo = fmt.Sprintf(" [%s]", tsStr)
 		}
 
-		fmt.Printf("[%02d/%02d] Fetching track: %s - %s%s\n", trackNum, totalTracks, track.Artist, track.Title, timestampInfo)
+		fmt.Fprintf(output, "[%02d/%02d] Fetching track: %s - %s%s\n", trackNum, totalTracks, track.Artist, track.Title, timestampInfo)
 
 		if opts.ProgressReporter != nil {
 			_ = opts.ProgressReporter.Emit(progress.Event{
@@ -455,13 +474,13 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 				if !opts.Verbose && !isAgent {
 					switch ev.Phase {
 					case "search":
-						fmt.Printf("  - Searching sources: %s\n", opts.Sources)
+						fmt.Fprintf(output, "  - Searching sources: %s\n", opts.Sources)
 					case "download":
-						fmt.Println("  - Downloading audio stream & artwork...")
+						fmt.Fprintln(output, "  - Downloading audio stream & artwork...")
 					case "verify":
-						fmt.Println("  - Inspecting audio quality & spectrum...")
+						fmt.Fprintln(output, "  - Inspecting audio quality & spectrum...")
 					case "metadata":
-						fmt.Println("  - Enriching metadata & cover art...")
+						fmt.Fprintln(output, "  - Enriching metadata & cover art...")
 					}
 				}
 			case progress.EventCandidateSelected:
@@ -471,7 +490,7 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 					if ev.Candidate.Duration > 0 {
 						durStr = fmt.Sprintf(" [%s %s]", ev.Candidate.Source, formatDuration(ev.Candidate.Duration))
 					}
-					fmt.Printf("  - Selected: %q%s\n", ev.Candidate.Title, durStr)
+					fmt.Fprintf(output, "  - Selected: %q%s\n", ev.Candidate.Title, durStr)
 				}
 			case progress.EventComplete:
 				lastResult = ev.Result
@@ -494,10 +513,10 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 
 		cmd := cmdutil.NewCommand(ctx, fetchTrackCmdName, args...)
 		if isAgent {
-			cmd.Stdout = os.Stdout
+			cmd.Stdout = output
 			cmd.Stderr = os.Stderr
 		} else if opts.Verbose || sockServer == nil {
-			cmd.Stdout = os.Stdout
+			cmd.Stdout = output
 			cmd.Stderr = os.Stderr
 		} else {
 			cmd.Stdout = &stdoutBuf
@@ -527,7 +546,7 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 			if isAgent {
 				fmt.Fprintf(os.Stderr, "ERR: failed to download track %q: %s\n", searchTarget, errMsg)
 			} else {
-				fmt.Printf("  [ERROR] Failed to download track %q: %s\n", searchTarget, errMsg)
+				fmt.Fprintf(output, "  [ERROR] Failed to download track %q: %s\n", searchTarget, errMsg)
 			}
 			failureCount++
 
@@ -589,12 +608,12 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 						}
 						gainStr = fmt.Sprintf(" | Gain Offset: %s%.1f dB", gainSign, lastResult.SuggestedGainDb)
 					}
-					fmt.Printf("  - Quality: %s (%d kHz)%s\n", lastResult.BandwidthRating, lastResult.BandwidthHz/1000, gainStr)
+					fmt.Fprintf(output, "  - Quality: %s (%d kHz)%s\n", lastResult.BandwidthRating, lastResult.BandwidthHz/1000, gainStr)
 				}
 				if lastResult != nil && lastResult.Title != "" && lastResult.Album != "" {
-					fmt.Printf("  - Metadata: %q (%s, %s)\n", lastResult.Title, lastResult.Album, lastResult.ReleaseYear)
+					fmt.Fprintf(output, "  - Metadata: %q (%s, %s)\n", lastResult.Title, lastResult.Album, lastResult.ReleaseYear)
 				}
-				fmt.Printf("  [OK] Completed: %s\n", finalFilename)
+				fmt.Fprintf(output, "  [OK] Completed: %s\n", finalFilename)
 			}
 
 			if opts.ProgressReporter != nil {
@@ -665,9 +684,9 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 	// Generate M3U Playlist file in mix track order
 	generatedPlaylist, err := GenerateM3UPlaylist(targetDir, opts.MixTitle, opts.Tracks, manifest)
 	if err != nil {
-		fmt.Printf("  Failed to generate playlist file: %v\n", err)
+		fmt.Fprintf(output, "  Failed to generate playlist file: %v\n", err)
 	} else {
-		fmt.Printf("  Generated M3U playlist file: %s\n", generatedPlaylist)
+		fmt.Fprintf(output, "  Generated M3U playlist file: %s\n", generatedPlaylist)
 	}
 
 	if opts.ProgressReporter != nil {
@@ -688,29 +707,29 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 	}
 
 	if isAgent {
-		fmt.Printf("status: complete\ndownloaded: %d\nfailed: %d\n", successCount, failureCount)
+		fmt.Fprintf(output, "status: complete\ndownloaded: %d\nfailed: %d\n", successCount, failureCount)
 	} else {
 		if sep != "" {
-			fmt.Println(sep)
+			fmt.Fprintln(output, sep)
 		}
-		fmt.Println("Download Process Finished!")
-		fmt.Printf("  Downloaded: %d tracks\n", successCount)
-		fmt.Printf("  Failed: %d tracks\n", failureCount)
+		fmt.Fprintln(output, "Download Process Finished!")
+		fmt.Fprintf(output, "  Downloaded: %d tracks\n", successCount)
+		fmt.Fprintf(output, "  Failed: %d tracks\n", failureCount)
 
 		if failureCount > 0 && manifest != nil {
-			fmt.Printf("\nFailed Tracks (%d):\n", failureCount)
+			fmt.Fprintf(output, "\nFailed Tracks (%d):\n", failureCount)
 			for _, entry := range manifest.Tracks {
 				if entry.Status == "failed" {
 					errMsg := ""
 					if entry.ErrorMessage != "" {
 						errMsg = fmt.Sprintf(" (%s)", entry.ErrorMessage)
 					}
-					fmt.Printf("  - [%02d/%02d] %s - %s%s\n", entry.Index, totalTracks, entry.Artist, entry.Title, errMsg)
+					fmt.Fprintf(output, "  - [%02d/%02d] %s - %s%s\n", entry.Index, totalTracks, entry.Artist, entry.Title, errMsg)
 				}
 			}
 		}
 		if sep != "" {
-			fmt.Println(sep)
+			fmt.Fprintln(output, sep)
 		}
 	}
 

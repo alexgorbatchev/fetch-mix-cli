@@ -3,8 +3,10 @@ package scraper
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -46,7 +48,21 @@ func TestScrapeSet_CacheHit(t *testing.T) {
 	})
 
 	ctx := context.Background()
+	readOutput, writeOutput, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	originalOutput := os.Stdout
+	os.Stdout = writeOutput
+	t.Cleanup(func() { os.Stdout = originalOutput })
 	content, err := ScrapeSetWithCache(ctx, testURL, false)
+	os.Stdout = originalOutput
+	_ = writeOutput.Close()
+	output, readErr := io.ReadAll(readOutput)
+	_ = readOutput.Close()
+	if readErr != nil || len(output) != 0 {
+		t.Fatalf("cache hit polluted stdout: %q (error %v)", output, readErr)
+	}
 	if err != nil {
 		t.Fatalf("ScrapeSetWithCache error: %v", err)
 	}

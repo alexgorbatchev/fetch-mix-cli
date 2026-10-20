@@ -3,9 +3,13 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -78,6 +82,11 @@ func execute(ctx context.Context) error {
 	return newRootCmd().ExecuteContext(ctx)
 }
 
+var jsonOutput bool
+var listCandidates bool
+var candidateURL string
+var resultWriter io.Writer = os.Stdout
+
 func newRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:          "fetch-mix <url|query>",
@@ -94,6 +103,12 @@ parses tracklists deterministically, and downloads individual tracks using fetch
 			}
 
 			targetQuery := strings.TrimSpace(strings.Join(args, " "))
+			if candidateURL != "" {
+				if err := validateCandidateURL(candidateURL); err != nil {
+					return err
+				}
+				targetQuery = candidateURL
+			}
 
 			// Check if target is a YouTube URL or video ID
 			videoID := youtube.ExtractVideoID(targetQuery)
@@ -105,6 +120,8 @@ parses tracklists deterministically, and downloads individual tracks using fetch
 		},
 	}
 
+	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "Output structured results as JSON")
+	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) { resultWriter = cmd.OutOrStdout() }
 	rootCmd.SetVersionTemplate("{{.Version}}\n")
 
 	addPipelineFlags(rootCmd.Flags())
@@ -122,6 +139,8 @@ parses tracklists deterministically, and downloads individual tracks using fetch
 }
 
 func addPipelineFlags(flags *pflag.FlagSet) {
+	flags.BoolVar(&listCandidates, "list-candidates", false, "List matching sets without extracting or downloading")
+	flags.StringVar(&candidateURL, "candidate-url", "", "Use this exact selected source URL without searching again")
 	flags.StringVarP(&outDir, "out-dir", "o", "", "Output directory for tracks (default: cwd/{mix-title})")
 	flags.BoolVar(&dryRun, "dry-run", false, "Preview tracklist without downloading")
 	flags.BoolVar(&noCache, "no-cache", false, "Disable local caching")
@@ -198,41 +217,46 @@ func newAICmd() *cobra.Command {
 
 func runAIList(cmd *cobra.Command) error {
 	statuses := llm.GetProviderStatuses()
+	if jsonOutput {
+		return json.NewEncoder(cmd.OutOrStdout()).Encode(struct {
+			Providers []llm.ProviderInfo `json:"providers"`
+		}{statuses})
+	}
 	if godeps.IsAgentMode() {
 		for _, s := range statuses {
-			fmt.Printf("%s\t%s\t%s\t%s\n", s.ID, s.DefaultModel, s.EnvVar, s.Status)
+			fmt.Fprintf(diagnosticWriter(), "%s\t%s\t%s\t%s\n", s.ID, s.DefaultModel, s.EnvVar, s.Status)
 		}
 		return nil
 	}
 
 	sep := ui.Separator("=", 50)
 	if sep != "" {
-		fmt.Println(sep)
+		fmt.Fprintln(diagnosticWriter(), sep)
 	}
-	fmt.Println("Supported LLM Providers & Models (auto-detection priority order):")
+	fmt.Fprintln(diagnosticWriter(), "Supported LLM Providers & Models (auto-detection priority order):")
 	if sep != "" {
-		fmt.Println(sep)
+		fmt.Fprintln(diagnosticWriter(), sep)
 	}
-	fmt.Printf("%-14s %-26s %-20s %s\n", "PROVIDER", "DEFAULT MODEL", "ENV VAR", "STATUS")
+	fmt.Fprintf(diagnosticWriter(), "%-14s %-26s %-20s %s\n", "PROVIDER", "DEFAULT MODEL", "ENV VAR", "STATUS")
 	if subSep := ui.Separator("-", 50); subSep != "" {
-		fmt.Println(subSep)
+		fmt.Fprintln(diagnosticWriter(), subSep)
 	}
 
 	for _, s := range statuses {
-		fmt.Printf("%-14s %-26s %-20s %s\n", s.ID, s.DefaultModel, s.EnvVar, s.Status)
+		fmt.Fprintf(diagnosticWriter(), "%-14s %-26s %-20s %s\n", s.ID, s.DefaultModel, s.EnvVar, s.Status)
 	}
 
 	if sep != "" {
-		fmt.Println(sep)
+		fmt.Fprintln(diagnosticWriter(), sep)
 	}
-	fmt.Println("Usage Examples:")
-	fmt.Println("  fetch-mix youtube -p auto <url>")
-	fmt.Println("  fetch-mix youtube -p litellm -m gpt-4o-mini <url>")
-	fmt.Println("  fetch-mix youtube -p ollama -m llama3.2 <url>")
-	fmt.Println("  fetch-mix youtube -p openai -m gpt-4o-mini <url>")
-	fmt.Println("  fetch-mix youtube -p anthropic -m claude-3-5-haiku-latest <url>")
+	fmt.Fprintln(diagnosticWriter(), "Usage Examples:")
+	fmt.Fprintln(diagnosticWriter(), "  fetch-mix youtube -p auto <url>")
+	fmt.Fprintln(diagnosticWriter(), "  fetch-mix youtube -p litellm -m gpt-4o-mini <url>")
+	fmt.Fprintln(diagnosticWriter(), "  fetch-mix youtube -p ollama -m llama3.2 <url>")
+	fmt.Fprintln(diagnosticWriter(), "  fetch-mix youtube -p openai -m gpt-4o-mini <url>")
+	fmt.Fprintln(diagnosticWriter(), "  fetch-mix youtube -p anthropic -m claude-3-5-haiku-latest <url>")
 	if sep != "" {
-		fmt.Println(sep)
+		fmt.Fprintln(diagnosticWriter(), sep)
 	}
 	return nil
 }
@@ -257,26 +281,29 @@ func runAIInspect(cmd *cobra.Command, providerName string) error {
 		return fmt.Errorf("unknown provider %q (supported: %s)", providerName, strings.Join(validIDs, ", "))
 	}
 
+	if jsonOutput {
+		return json.NewEncoder(cmd.OutOrStdout()).Encode(found)
+	}
 	if godeps.IsAgentMode() {
-		fmt.Printf("provider: %s\nname: %s\ndefault_model: %s\nenv_var: %s\nstatus: %s\n",
+		fmt.Fprintf(diagnosticWriter(), "provider: %s\nname: %s\ndefault_model: %s\nenv_var: %s\nstatus: %s\n",
 			found.ID, found.Name, found.DefaultModel, found.EnvVar, found.Status)
 		return nil
 	}
 
 	sep := ui.Separator("=", 50)
 	if sep != "" {
-		fmt.Println(sep)
+		fmt.Fprintln(diagnosticWriter(), sep)
 	}
-	fmt.Printf("Provider Details: %s\n", found.Name)
+	fmt.Fprintf(diagnosticWriter(), "Provider Details: %s\n", found.Name)
 	if sep != "" {
-		fmt.Println(sep)
+		fmt.Fprintln(diagnosticWriter(), sep)
 	}
-	fmt.Printf("Provider ID    : %s\n", found.ID)
-	fmt.Printf("Default Model  : %s\n", found.DefaultModel)
-	fmt.Printf("Environment Var: %s\n", found.EnvVar)
-	fmt.Printf("Status         : %s\n", found.Status)
+	fmt.Fprintf(diagnosticWriter(), "Provider ID    : %s\n", found.ID)
+	fmt.Fprintf(diagnosticWriter(), "Default Model  : %s\n", found.DefaultModel)
+	fmt.Fprintf(diagnosticWriter(), "Environment Var: %s\n", found.EnvVar)
+	fmt.Fprintf(diagnosticWriter(), "Status         : %s\n", found.Status)
 	if sep != "" {
-		fmt.Println(sep)
+		fmt.Fprintln(diagnosticWriter(), sep)
 	}
 	return nil
 }
@@ -329,66 +356,72 @@ func newDepsCmd() *cobra.Command {
 }
 
 func runDepsVerify(cmd *cobra.Command) error {
+	if jsonOutput {
+		return runDepsJSON(cmd, nil, "inspect")
+	}
 	isAgent := godeps.IsAgentMode()
 	reports, err := deps.VerifyDependencies(cmd.Context())
 
 	if isAgent {
 		for _, r := range reports {
 			if r.Satisfied {
-				fmt.Printf("%s: ok (version %s, min %s)\n", r.Name, r.DetectedVersion, r.MinVersion)
+				fmt.Fprintf(diagnosticWriter(), "%s: ok (version %s, min %s)\n", r.Name, r.DetectedVersion, r.MinVersion)
 			} else if !r.Installed {
-				fmt.Printf("%s: missing\n", r.Name)
+				fmt.Fprintf(diagnosticWriter(), "%s: missing\n", r.Name)
 			} else {
-				fmt.Printf("%s: fail (version %s, min %s)\n", r.Name, r.DetectedVersion, r.MinVersion)
+				fmt.Fprintf(diagnosticWriter(), "%s: fail (version %s, min %s)\n", r.Name, r.DetectedVersion, r.MinVersion)
 			}
 		}
 		if err != nil {
-			fmt.Printf("status: error\nerror: %v\n", err)
+			fmt.Fprintf(diagnosticWriter(), "status: error\nerror: %v\n", err)
 			return err
 		}
-		fmt.Println("status: ok")
+		fmt.Fprintln(diagnosticWriter(), "status: ok")
 		return nil
 	}
 
 	for _, r := range reports {
 		if r.Satisfied {
-			fmt.Printf("%s: %s (min %s) [OK]\n", r.Name, r.DetectedVersion, r.MinVersion)
+			fmt.Fprintf(diagnosticWriter(), "%s: %s (min %s) [OK]\n", r.Name, r.DetectedVersion, r.MinVersion)
 		} else if !r.Installed {
-			fmt.Printf("%s: missing in $PATH [FAIL] - %s\n", r.Name, r.Error)
+			fmt.Fprintf(diagnosticWriter(), "%s: missing in $PATH [FAIL] - %s\n", r.Name, r.Error)
 		} else {
-			fmt.Printf("%s: %s (min %s) [FAIL] - %s\n", r.Name, r.DetectedVersion, r.MinVersion, r.Error)
+			fmt.Fprintf(diagnosticWriter(), "%s: %s (min %s) [FAIL] - %s\n", r.Name, r.DetectedVersion, r.MinVersion, r.Error)
 		}
 	}
 
 	if err != nil {
 		return err
 	}
-	fmt.Println("\nAll required dependencies are installed and operational.")
+	fmt.Fprintln(diagnosticWriter(), "\nAll required dependencies are installed and operational.")
 	return nil
 }
 
 func runDepsInstall(cmd *cobra.Command, args []string) error {
+	if jsonOutput {
+		return runDepsJSON(cmd, args, "install")
+	}
 	_ = deps.InitManagedPath()
 	isAgent := godeps.IsAgentMode()
 	if len(args) > 0 {
 		for _, depName := range args {
 			if !isAgent {
-				fmt.Printf("Installing %s...\n", depName)
+				fmt.Fprintf(diagnosticWriter(), "Installing %s...\n", depName)
 			}
 			if err := deps.InstallDependency(cmd.Context(), depName); err != nil {
 				return fmt.Errorf("installing %s: %w", depName, err)
 			}
 			if isAgent {
-				fmt.Printf("OK: installed %s\n", depName)
+				fmt.Fprintf(diagnosticWriter(), "OK: installed %s\n", depName)
 			} else {
-				fmt.Printf("[OK] %s installed successfully.\n", depName)
+				fmt.Fprintf(diagnosticWriter(), "[OK] %s installed successfully.\n", depName)
 			}
 		}
 		return nil
 	}
 
 	if !isAgent {
-		fmt.Println("Checking and installing missing dependencies...")
+		fmt.Fprintln(diagnosticWriter(), "Checking and installing missing dependencies...")
 	}
 	installed, err := deps.InstallMissingDependencies(cmd.Context())
 	if err != nil {
@@ -396,44 +429,47 @@ func runDepsInstall(cmd *cobra.Command, args []string) error {
 	}
 	if len(installed) == 0 {
 		if isAgent {
-			fmt.Println("status: satisfied")
+			fmt.Fprintln(diagnosticWriter(), "status: satisfied")
 		} else {
-			fmt.Println("All dependencies are already satisfied.")
+			fmt.Fprintln(diagnosticWriter(), "All dependencies are already satisfied.")
 		}
 	} else {
 		if isAgent {
 			for _, depName := range installed {
-				fmt.Printf("OK: installed %s\n", depName)
+				fmt.Fprintf(diagnosticWriter(), "OK: installed %s\n", depName)
 			}
 		} else {
-			fmt.Printf("[OK] Successfully installed: %s\n", strings.Join(installed, ", "))
+			fmt.Fprintf(diagnosticWriter(), "[OK] Successfully installed: %s\n", strings.Join(installed, ", "))
 		}
 	}
 	return nil
 }
 
 func runDepsUpdate(cmd *cobra.Command, args []string) error {
+	if jsonOutput {
+		return runDepsJSON(cmd, args, "update")
+	}
 	_ = deps.InitManagedPath()
 	isAgent := godeps.IsAgentMode()
 	if len(args) > 0 {
 		for _, depName := range args {
 			if !isAgent {
-				fmt.Printf("Updating %s...\n", depName)
+				fmt.Fprintf(diagnosticWriter(), "Updating %s...\n", depName)
 			}
 			if err := deps.UpdateDependency(cmd.Context(), depName); err != nil {
 				return fmt.Errorf("updating %s: %w", depName, err)
 			}
 			if isAgent {
-				fmt.Printf("OK: updated %s\n", depName)
+				fmt.Fprintf(diagnosticWriter(), "OK: updated %s\n", depName)
 			} else {
-				fmt.Printf("[OK] %s updated successfully.\n", depName)
+				fmt.Fprintf(diagnosticWriter(), "[OK] %s updated successfully.\n", depName)
 			}
 		}
 		return nil
 	}
 
 	if !isAgent {
-		fmt.Println("Updating all dependencies to latest versions...")
+		fmt.Fprintln(diagnosticWriter(), "Updating all dependencies to latest versions...")
 	}
 	updated, err := deps.UpdateAllDependencies(cmd.Context())
 	if err != nil {
@@ -441,10 +477,10 @@ func runDepsUpdate(cmd *cobra.Command, args []string) error {
 	}
 	if isAgent {
 		for _, depName := range updated {
-			fmt.Printf("OK: updated %s\n", depName)
+			fmt.Fprintf(diagnosticWriter(), "OK: updated %s\n", depName)
 		}
 	} else {
-		fmt.Printf("[OK] Successfully updated: %s\n", strings.Join(updated, ", "))
+		fmt.Fprintf(diagnosticWriter(), "[OK] Successfully updated: %s\n", strings.Join(updated, ", "))
 	}
 	return nil
 }
@@ -456,26 +492,29 @@ func newUpgradeCmd() *cobra.Command {
 		Short:        "Upgrade fetch-mix binary to latest release",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if jsonOutput {
+				return runUpgradeJSON(cmd, version)
+			}
 			isAgent := godeps.IsAgentMode()
 			if !isAgent {
-				fmt.Printf("Checking for newer fetch-mix release (current version: %s)...\n", version)
+				fmt.Fprintf(diagnosticWriter(), "Checking for newer fetch-mix release (current version: %s)...\n", version)
 			}
 			newVer, err := godeps.UpgradeSelf(cmd.Context(), "alexgorbatchev", "fetch-mix-cli", version)
 			if err != nil {
 				if strings.Contains(err.Error(), "already at the latest version") {
 					if isAgent {
-						fmt.Printf("status: current\nversion: %s\n", version)
+						fmt.Fprintf(diagnosticWriter(), "status: current\nversion: %s\n", version)
 					} else {
-						fmt.Printf("fetch-mix is already up to date (%s).\n", version)
+						fmt.Fprintf(diagnosticWriter(), "fetch-mix is already up to date (%s).\n", version)
 					}
 					return nil
 				}
 				return fmt.Errorf("upgrade failed: %w", err)
 			}
 			if isAgent {
-				fmt.Printf("OK: upgraded fetch-mix to %s\n", newVer)
+				fmt.Fprintf(diagnosticWriter(), "OK: upgraded fetch-mix to %s\n", newVer)
 			} else {
-				fmt.Printf("[OK] Successfully upgraded fetch-mix to version %s!\n", newVer)
+				fmt.Fprintf(diagnosticWriter(), "[OK] Successfully upgraded fetch-mix to version %s!\n", newVer)
 			}
 			return nil
 		},
@@ -497,12 +536,32 @@ func resolveProgressReporter(ctx context.Context) (*progress.Reporter, error) {
 }
 
 func ensureDependencies(ctx context.Context) error {
+	if jsonOutput {
+		if err := deps.InitManagedPath(); err != nil {
+			return err
+		}
+		manager := deps.NewManager()
+		if _, err := manager.Verify(ctx); err != nil {
+			if !autoInstall {
+				return err
+			}
+			_, installErr := manager.InstallUnsatisfied(ctx)
+			return installErr
+		}
+		return nil
+	}
 	return deps.NewManager().Ensure(ctx, godeps.EnsureOptions{
 		AutoInstall: autoInstall,
 	})
 }
 
 func runMixPipeline(ctx context.Context, query string) error {
+	if candidateURL != "" {
+		if err := validateCandidateURL(candidateURL); err != nil {
+			return err
+		}
+		query = candidateURL
+	}
 	reporter, err := resolveProgressReporter(ctx)
 	if err != nil {
 		return fmt.Errorf("initializing progress reporter: %w", err)
@@ -511,7 +570,7 @@ func runMixPipeline(ctx context.Context, query string) error {
 		defer reporter.Close()
 	}
 
-	if !dryRun {
+	if !dryRun && !listCandidates {
 		if err := ensureDependencies(ctx); err != nil {
 			return err
 		}
@@ -519,11 +578,11 @@ func runMixPipeline(ctx context.Context, query string) error {
 
 	var chosenSet types.SearchResult
 
-	isDirectCrawlable := (strings.HasPrefix(query, "http://") || strings.HasPrefix(query, "https://")) &&
-		!strings.Contains(strings.ToLower(query), "1001tracklists.com")
+	isDirectCrawlable := candidateURL != "" || ((strings.HasPrefix(query, "http://") || strings.HasPrefix(query, "https://")) &&
+		!strings.Contains(strings.ToLower(query), "1001tracklists.com"))
 
 	if isDirectCrawlable {
-		fmt.Println("Direct crawlable URL detected. Bypassing search...")
+		fmt.Fprintln(diagnosticWriter(), "Direct crawlable URL detected. Bypassing search...")
 		pageTitle := "Direct URL Tracklist"
 		parts := strings.Split(query, "/")
 		if len(parts) > 0 && parts[len(parts)-1] != "" {
@@ -538,6 +597,9 @@ func runMixPipeline(ctx context.Context, query string) error {
 			Title: pageTitle,
 			URL:   query,
 		}
+		if listCandidates {
+			return json.NewEncoder(resultWriter).Encode(mixCandidateResult{Status: "success", Candidates: []types.SearchResult{chosenSet}})
+		}
 	} else {
 		if reporter != nil {
 			_ = reporter.Emit(progress.Event{
@@ -546,28 +608,31 @@ func runMixPipeline(ctx context.Context, query string) error {
 				Message: fmt.Sprintf("Searching for %q...", query),
 			})
 		}
-		fmt.Printf("Searching for %q...\n", query)
+		fmt.Fprintf(diagnosticWriter(), "Searching for %q...\n", query)
 		results, err := search.SearchSet(ctx, query)
 		if err != nil {
 			return fmt.Errorf("search error: %w", err)
 		}
 
+		if listCandidates {
+			return json.NewEncoder(resultWriter).Encode(mixCandidateResult{Status: "success", Candidates: results})
+		}
 		if len(results) == 0 {
 			return fmt.Errorf("no matching DJ sets found for %q", query)
 		}
 
 		if len(results) == 1 {
 			chosenSet = results[0]
-			fmt.Printf("Found set: %q\n", chosenSet.Title)
+			fmt.Fprintf(diagnosticWriter(), "Found set: %q\n", chosenSet.Title)
 		} else {
-			fmt.Println("\nMultiple sets found. Please choose one:")
+			fmt.Fprintln(diagnosticWriter(), "\nMultiple sets found. Please choose one:")
 			for i, r := range results {
-				fmt.Printf("  [%d] %s\n", i+1, r.Title)
+				fmt.Fprintf(diagnosticWriter(), "  [%d] %s\n", i+1, r.Title)
 			}
 
 			if interactive && !godeps.IsAgentMode() {
 				reader := bufio.NewReader(os.Stdin)
-				fmt.Printf("Choose option (1-%d) [1]: ", len(results))
+				fmt.Fprintf(diagnosticWriter(), "Choose option (1-%d) [1]: ", len(results))
 				choiceStr, _ := reader.ReadString('\n')
 				choiceStr = strings.TrimSpace(choiceStr)
 				choiceNum, err := strconv.Atoi(choiceStr)
@@ -579,7 +644,7 @@ func runMixPipeline(ctx context.Context, query string) error {
 			} else {
 				chosenSet = results[0]
 			}
-			fmt.Printf("Selected: %q\n", chosenSet.Title)
+			fmt.Fprintf(diagnosticWriter(), "Selected: %q\n", chosenSet.Title)
 		}
 	}
 
@@ -590,7 +655,7 @@ func runMixPipeline(ctx context.Context, query string) error {
 			Message: fmt.Sprintf("Scraping tracklist from %s", chosenSet.URL),
 		})
 	}
-	fmt.Printf("\nScraping tracklist from: %s...\n", chosenSet.URL)
+	fmt.Fprintf(diagnosticWriter(), "\nScraping tracklist from: %s...\n", chosenSet.URL)
 	markdown, err := scraper.ScrapeSetWithCache(ctx, chosenSet.URL, noCache)
 	if err != nil {
 		return fmt.Errorf("scraping error: %w", err)
@@ -614,13 +679,13 @@ func runMixPipeline(ctx context.Context, query string) error {
 
 	if !dryRun {
 		hasHours := downloader.HasHourTimestamps(tracks, skippedItems)
-		fmt.Printf("\nFound %d tracks:\n", len(tracks))
+		fmt.Fprintf(diagnosticWriter(), "\nFound %d tracks:\n", len(tracks))
 		for _, tr := range tracks {
 			tsStr := downloader.NormalizeTimestamp(tr.Timestamp, hasHours)
 			if tsStr != "" {
-				fmt.Printf("  [%s] %s - %s\n", tsStr, tr.Artist, tr.Title)
+				fmt.Fprintf(diagnosticWriter(), "  [%s] %s - %s\n", tsStr, tr.Artist, tr.Title)
 			} else {
-				fmt.Printf("  %s - %s\n", tr.Artist, tr.Title)
+				fmt.Fprintf(diagnosticWriter(), "  %s - %s\n", tr.Artist, tr.Title)
 			}
 		}
 	}
@@ -638,16 +703,29 @@ func runMixPipeline(ctx context.Context, query string) error {
 		ProgressReporter: reporter,
 	}
 
-	return downloader.DownloadSet(ctx, opts)
+	return finishMix(ctx, opts, chosenSet.URL)
 }
 
 func runYouTubePipeline(ctx context.Context, videoURL string) error {
+	if candidateURL != "" {
+		if err := validateCandidateURL(candidateURL); err != nil {
+			return err
+		}
+		videoURL = candidateURL
+	}
 	reporter, err := resolveProgressReporter(ctx)
 	if err != nil {
 		return fmt.Errorf("initializing progress reporter: %w", err)
 	}
 	if reporter != nil {
 		defer reporter.Close()
+	}
+	if listCandidates {
+		id := youtube.ExtractVideoID(videoURL)
+		if id == "" {
+			return fmt.Errorf("YouTube comments extractor requires a YouTube URL or video ID")
+		}
+		return json.NewEncoder(resultWriter).Encode(mixCandidateResult{Status: "success", Candidates: []types.SearchResult{{Title: videoURL, URL: "https://www.youtube.com/watch?v=" + id}}})
 	}
 
 	if !dryRun {
@@ -664,7 +742,7 @@ func runYouTubePipeline(ctx context.Context, videoURL string) error {
 		})
 	}
 
-	fmt.Printf("Processing YouTube video tracklist comments: %s...\n", videoURL)
+	fmt.Fprintf(diagnosticWriter(), "Processing YouTube video tracklist comments: %s...\n", videoURL)
 	tracks, skippedItems, videoTitle, err := youtube.ProcessYouTubeComments(ctx, videoURL, noCache, llmProvider, llmModel)
 	if err != nil {
 		return fmt.Errorf("YouTube comments extraction failed: %w", err)
@@ -680,14 +758,14 @@ func runYouTubePipeline(ctx context.Context, videoURL string) error {
 
 	if !dryRun {
 		hasHours := downloader.HasHourTimestamps(tracks, skippedItems)
-		fmt.Printf("\nFound tracklist for: %q\n", videoTitle)
-		fmt.Printf("Extracted %d tracks:\n", len(tracks))
+		fmt.Fprintf(diagnosticWriter(), "\nFound tracklist for: %q\n", videoTitle)
+		fmt.Fprintf(diagnosticWriter(), "Extracted %d tracks:\n", len(tracks))
 		for _, tr := range tracks {
 			tsStr := downloader.NormalizeTimestamp(tr.Timestamp, hasHours)
 			if tsStr != "" {
-				fmt.Printf("  [%s] %s - %s\n", tsStr, tr.Artist, tr.Title)
+				fmt.Fprintf(diagnosticWriter(), "  [%s] %s - %s\n", tsStr, tr.Artist, tr.Title)
 			} else {
-				fmt.Printf("  %s - %s\n", tr.Artist, tr.Title)
+				fmt.Fprintf(diagnosticWriter(), "  %s - %s\n", tr.Artist, tr.Title)
 			}
 		}
 	}
@@ -705,5 +783,73 @@ func runYouTubePipeline(ctx context.Context, videoURL string) error {
 		ProgressReporter: reporter,
 	}
 
-	return downloader.DownloadSet(ctx, opts)
+	return finishMix(ctx, opts, videoURL)
+}
+
+func diagnosticWriter() io.Writer {
+	if jsonOutput {
+		return os.Stderr
+	}
+	return os.Stdout
+}
+
+func validateCandidateURL(value string) error {
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.Hostname() == "" || parsed.User != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") {
+		return fmt.Errorf("candidate-url must be an absolute HTTP or HTTPS URL")
+	}
+	return nil
+}
+
+type mixCandidateResult struct {
+	Status     string               `json:"status"`
+	Candidates []types.SearchResult `json:"candidates"`
+}
+
+type mixTrackResult struct {
+	Index      int    `json:"index"`
+	Artist     string `json:"artist"`
+	Title      string `json:"title"`
+	Timestamp  string `json:"timestamp,omitempty"`
+	Status     string `json:"status"`
+	OutputFile string `json:"output_file,omitempty"`
+	Error      string `json:"error,omitempty"`
+}
+type mixResult struct {
+	Status    string              `json:"status"`
+	Title     string              `json:"title"`
+	SourceURL string              `json:"source_url,omitempty"`
+	Tracks    []mixTrackResult    `json:"tracks"`
+	Skipped   []types.SkippedItem `json:"skipped"`
+}
+
+func finishMix(ctx context.Context, opts downloader.DownloadOptions, sourceURL string) error {
+	if !jsonOutput {
+		return downloader.DownloadSet(ctx, opts)
+	}
+	manifest := &downloader.MixManifest{}
+	opts.Result = manifest
+	opts.Output = os.Stderr
+	err := downloader.DownloadSet(ctx, opts)
+	result := mixResult{Status: "success", Title: opts.MixTitle, SourceURL: sourceURL, Tracks: []mixTrackResult{}, Skipped: opts.SkippedItems}
+	if opts.DryRun {
+		result.Status = "preview"
+	}
+	if err != nil {
+		result.Status = "error"
+	}
+	for _, entry := range manifest.Tracks {
+		file := ""
+		if entry.ActualFile != "" {
+			file = filepath.Join(manifest.TargetDir, entry.ActualFile)
+		}
+		if entry.Status == "failed" {
+			result.Status = "partial"
+		}
+		result.Tracks = append(result.Tracks, mixTrackResult{Index: entry.Index, Artist: entry.Artist, Title: entry.Title, Timestamp: entry.Timestamp, Status: entry.Status, OutputFile: file, Error: entry.ErrorMessage})
+	}
+	if writeErr := json.NewEncoder(resultWriter).Encode(result); writeErr != nil {
+		return writeErr
+	}
+	return err
 }

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -39,7 +40,7 @@ func ScrapeSetWithCache(ctx context.Context, urlStr string, noCache bool) (strin
 		cacheKey := fmt.Sprintf("scrape_%s.json", cache.HashKey(urlStr))
 		var cached cachedScrapedMarkdown
 		if c.Get(cacheKey, &cached) && cached.Markdown != "" {
-			fmt.Printf("Found cached markdown on disk for URL %q\n", urlStr)
+			fmt.Fprintf(os.Stderr, "Found cached markdown on disk for URL %q\n", urlStr)
 			return cached.Markdown, nil
 		}
 	}

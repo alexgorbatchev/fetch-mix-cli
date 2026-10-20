@@ -7,6 +7,8 @@ A command-line tool with AI agent support for bedroom and amateur DJs to find, e
 - Resolves 1001Tracklists URLs automatically by extracting set slugs and discovering unblocked web mirrors.
 - Generates order-preserving M3U playlists inside the mix output folder keeping the exact chronological track order of the set.
 - Tracks download state with resumable JSON manifests (`mix_manifest.json`) to skip already downloaded tracks when resuming.
+- Lists source candidates without downloading and accepts an exact selected URL for subsequent extraction.
+- Returns structured JSON for mix previews/downloads, candidate discovery, AI configuration, dependency management, and upgrades.
 - Integrates with `fetch-track` CLI for single-track audio stream downloading, loudness normalization, spectral inspection, and 1400x1400 cover art tagging.
 
 # How It Works
@@ -20,6 +22,7 @@ A command-line tool with AI agent support for bedroom and amateur DJs to find, e
 # How it Really Works
 
 - Interrogates direct tracklist URLs directly or extracts slugs from 1001tracklists URLs to locate crawlable mirror pages.
+- With `--candidate-url`, fetches the selected URL directly, including 1001Tracklists pages; normal 1001Tracklists input searches mirrors. Direct access can fail if the selected site blocks requests.
 - Scrapes web mirrors via MediaWiki APIs or HTML-to-Markdown pipelines and extracts structured artist/title pairs.
 - Fetches top YouTube comments using `yt-dlp --no-playlist`, filters candidate comments with separator density heuristics, and parses tracklists via structured LLM schemas.
 - Paces single-track downloads sequentially with randomized delays (1.0–2.5s) to prevent IP rate limits on streaming platforms.
@@ -27,6 +30,7 @@ A command-line tool with AI agent support for bedroom and amateur DJs to find, e
 - Writes atomic state entries to `mix_manifest.json` on disk to ensure interrupted mix downloads resume seamlessly without re-downloading.
 - Generates `playlist.m3u` using sanitized local file names matching the exact set sequence.
 - Streams real-time NDJSON progress events over UNIX domain sockets, TCP, or file descriptors when executed by AI agents or supervisor orchestrators.
+- With `--json`, writes one result to stdout and diagnostics to stderr. Mix results include the source URL and ordered track statuses, output files, and errors; `--dry-run` returns a `preview` without downloading audio. Failed downloads remain visible in a `partial` result.
 
 # Prerequisites
 
@@ -57,6 +61,10 @@ fetch-mix --dry-run "https://www.youtube.com/watch?v=NeH3RpyocNc"
 # Extract tracklist from YouTube comments via LLM
 fetch-mix youtube "https://www.youtube.com/watch?v=NeH3RpyocNc"
 
+# List matching source URLs, then extract the selected source without searching again
+fetch-mix --json --list-candidates "Bicep Essential Mix 2014"
+fetch-mix --json --dry-run --candidate-url "https://www.youtube.com/watch?v=NeH3RpyocNc" "Bicep Essential Mix 2014"
+
 # Inspect supported AI providers and models
 fetch-mix ai
 fetch-mix ai inspect openai
@@ -74,6 +82,9 @@ fetch-mix upgrade
 
 | Flag | Short | Default | Description |
 | :--- | :--- | :--- | :--- |
+| `--json` | | `false` | Return structured results; available on all subcommands |
+| `--list-candidates` | | `false` | Return candidate titles and URLs without extraction or downloads; a YouTube URL or video ID resolves to one canonical video candidate |
+| `--candidate-url <url>` | | `""` | Extract this exact selected HTTP(S) source URL without searching again |
 | `--out-dir <path>` | `-o` | `cwd/{mix-title}` | Output directory where mix tracks are saved |
 | `--dry-run` | | `false` | Preview tracklist and download plan without downloading |
 | `--auto-install` | | `false` | Automatically install missing dependencies without prompting |
@@ -89,6 +100,8 @@ fetch-mix upgrade
 | `--verbose` | `-v` | `false` | Enable verbose diagnostic logging |
 | `--version` | | `false` | Print version information and exit |
 | `--help` | `-h` | `false` | Print command line help |
+
+The pipeline flags above also apply to `fetch-mix youtube`, except `--interactive`. Use `--list-candidates` to obtain `{status,candidates:[{title,url}]}`. Pass a returned URL with `--candidate-url` when continuing a selection; `--dry-run` then inspects its tracklist without downloading audio.
 
 # Progress & IPC Telemetry
 

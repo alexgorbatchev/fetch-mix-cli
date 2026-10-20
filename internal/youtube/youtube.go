@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"regexp"
 	"sort"
 	"strings"
@@ -129,7 +130,7 @@ func FetchVideoComments(ctx context.Context, videoURL string, noCache bool) (*yo
 		}
 	}
 
-	fmt.Println("Fetching video details and comments from YouTube (up to 500 comments)...")
+	fmt.Fprintln(os.Stderr, "Fetching video details and comments from YouTube (up to 500 comments)...")
 
 	// Run yt-dlp to fetch comments
 	args := []string{
@@ -180,7 +181,7 @@ func ProcessYouTubeComments(ctx context.Context, videoURL string, noCache bool, 
 	if c != nil && videoID != "" && !noCache {
 		var cachedCached CachedYouTubeTracks
 		if c.Get(tracksCacheKey, &cachedCached) && len(cachedCached.Tracks) > 0 {
-			fmt.Printf("Found cached tracklist on disk for YouTube video ID %q\n", videoID)
+			fmt.Fprintf(os.Stderr, "Found cached tracklist on disk for YouTube video ID %q\n", videoID)
 			return cachedCached.Tracks, cachedCached.SkippedItems, cachedCached.VideoTitle, nil
 		}
 	}
@@ -191,19 +192,19 @@ func ProcessYouTubeComments(ctx context.Context, videoURL string, noCache bool, 
 	}
 
 	if commentCached {
-		fmt.Printf("Found cached comments on disk for YouTube video ID %q (%d comments)\n", videoID, len(info.Comments))
+		fmt.Fprintf(os.Stderr, "Found cached comments on disk for YouTube video ID %q (%d comments)\n", videoID, len(info.Comments))
 	} else {
-		fmt.Printf("Retrieved %d comments for video %q\n", len(info.Comments), info.Title)
+		fmt.Fprintf(os.Stderr, "Retrieved %d comments for video %q\n", len(info.Comments), info.Title)
 	}
 
-	fmt.Println("Filtering comments for tracklist candidates...")
+	fmt.Fprintln(os.Stderr, "Filtering comments for tracklist candidates...")
 	candidates := PreFilterComments(info.Comments)
 	if len(candidates) == 0 {
 		return nil, nil, info.Title, fmt.Errorf("no comments found that look like a tracklist")
 	}
 
 	resolvedP, resolvedM, _ := llm.ResolveProvider(providerID, modelName)
-	fmt.Printf("Found %d candidate comments. Querying LLM provider %s (%s) for tracklist extraction...\n", len(candidates), resolvedP, resolvedM)
+	fmt.Fprintf(os.Stderr, "Found %d candidate comments. Querying LLM provider %s (%s) for tracklist extraction...\n", len(candidates), resolvedP, resolvedM)
 
 	llmResult, err := ExtractTracklistWithAI(ctx, candidates, providerID, modelName)
 	if err != nil {
