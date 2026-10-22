@@ -544,20 +544,17 @@ func resolveProgressReporter(ctx context.Context) (*progress.Reporter, error) {
 	return progress.NewReporter(ctx, targetURI)
 }
 
+// ensureDependencies verifies required tools. JSON callers are machines, so
+// without --auto-install they get the verification failure instead of a prompt.
+// Ensure writes its messages to stderr and fails unless installation satisfied
+// every dependency.
 func ensureDependencies(ctx context.Context) error {
-	if jsonOutput {
+	if jsonOutput && !autoInstall {
 		if err := deps.InitManagedPath(); err != nil {
 			return err
 		}
-		manager := deps.NewManager()
-		if _, err := manager.Verify(ctx); err != nil {
-			if !autoInstall {
-				return err
-			}
-			_, installErr := manager.InstallUnsatisfied(ctx)
-			return installErr
-		}
-		return nil
+		_, err := deps.NewManager().Verify(ctx)
+		return err
 	}
 	return deps.NewManager().Ensure(ctx, godeps.EnsureOptions{
 		AutoInstall: autoInstall,
