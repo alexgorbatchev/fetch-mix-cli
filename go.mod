@@ -5,7 +5,7 @@ go 1.26.2
 require (
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2
 	github.com/alexgorbatchev/cobra-help-tree v1.1.0
-	github.com/alexgorbatchev/godeps v1.0.0
+	github.com/alexgorbatchev/godeps v1.1.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 	github.com/zendev-sh/goai v0.9.7

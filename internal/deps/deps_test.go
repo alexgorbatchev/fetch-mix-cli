@@ -96,7 +96,7 @@ func TestCompareVersions(t *testing.T) {
 		{"git-master", "1.0.0", false},
 		{"1.0.0.1", "1.0.0", false},
 		{"1.0.0", "1.1.0", true},
-		{"", "1.0.0", false},
+		{"", "1.0.0", true},
 	}
 
 	for _, tt := range tests {

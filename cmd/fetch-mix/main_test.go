@@ -510,10 +510,11 @@ func TestEnsureDependencies_FormattedOutput(t *testing.T) {
 
 	t.Setenv("AGENT", "0")
 
-	// Capture stdout
-	oldStdout := os.Stdout
+	// The prompt goes to stderr; stdout stays reserved for results.
+	stdout := captureStdout(t)
+	oldStderr := os.Stderr
 	rOut, wOut, _ := os.Pipe()
-	os.Stdout = wOut
+	os.Stderr = wOut
 
 	// Provide empty input for stdin
 	rIn, wIn, _ := os.Pipe()
@@ -522,12 +523,15 @@ func TestEnsureDependencies_FormattedOutput(t *testing.T) {
 	os.Stdin = rIn
 
 	defer func() {
-		os.Stdout = oldStdout
+		os.Stderr = oldStderr
 		os.Stdin = oldStdin
 	}()
 
 	_ = ensureDependencies(canceledCtx)
 	_ = wOut.Close()
+	if out := stdout(); out != "" {
+		t.Errorf("stdout = %q, want the prompt on stderr only", out)
+	}
 
 	var buf bytes.Buffer
 	_, _ = io.Copy(&buf, rOut)
