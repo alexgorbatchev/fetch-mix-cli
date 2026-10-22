@@ -26,3 +26,6 @@ build/
 .vscode/
 *.swp
 *.swo
+
+# Worktrees
+.workspaces/
