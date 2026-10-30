@@ -90,7 +90,7 @@ func TestAdminJSONUpgrade(t *testing.T) {
 			var out bytes.Buffer
 			command.SetOut(&out)
 			command.SetErr(&bytes.Buffer{})
-			command.SetArgs([]string{"--json", "upgrade"})
+			command.SetArgs([]string{"--json", "self", "upgrade"})
 			err := command.Execute()
 			var result struct {
 				Status  string `json:"status"`

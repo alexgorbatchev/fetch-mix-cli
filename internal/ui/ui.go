@@ -16,7 +16,7 @@ var (
 )
 
 // Separator returns a repeated character string.
-// In non-agent mode (agent=0) with an active TTY, it expands dynamically to terminal width (clamped to 120 max).
+// In non-agent mode (agent=0) with an active TTY, it expands dynamically to terminal width.
 // In agent mode (agent=1), divider lines are prohibited and it returns an empty string.
 func Separator(char string, defaultWidth int) string {
 	if godeps.IsAgentMode() {
@@ -30,10 +30,7 @@ func Separator(char string, defaultWidth int) string {
 	fd := int(os.Stdout.Fd())
 	if isTerminalFunc(fd) {
 		width, _, err := getSizeFunc(fd)
-		if err == nil && width >= 20 {
-			if width > 120 {
-				width = 120
-			}
+		if err == nil && width > 0 {
 			return strings.Repeat(char, width)
 		}
 	}

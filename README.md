@@ -1,4 +1,4 @@
-A command-line tool with AI agent support for bedroom and amateur DJs to find, extract, and download full tracklists from DJ sets, mixes, and YouTube videos.
+`fetch-mix` helps bedroom and amateur DJs find, extract, and download full tracklists from DJ sets, mixes, and YouTube videos.
 
 # What It Does
 
@@ -27,17 +27,11 @@ A command-line tool with AI agent support for bedroom and amateur DJs to find, e
 - Fetches top YouTube comments using `yt-dlp --no-playlist`, filters candidate comments with separator density heuristics, and parses tracklists via structured LLM schemas.
 - Paces single-track downloads sequentially with randomized delays (1.0–2.5s) to prevent IP rate limits on streaming platforms.
 - Normalizes timestamp formats across the entire mix (automatically padding to `[hh:mm:ss]` if any track exceeds one hour).
-- Writes atomic state entries to `mix_manifest.json` on disk to ensure interrupted mix downloads resume seamlessly without re-downloading.
+- Saves state in `mix_manifest.json` so repeat runs skip completed files. Any failed download or playlist write makes the command exit with code 1 after attempting the remaining tracks. Retry the same set to retry failed tracks. Unreadable or malformed existing manifests are rejected without overwriting them; repair the manifest or choose a new output directory.
 - Generates `playlist.m3u` using sanitized local file names matching the exact set sequence.
 - Streams real-time NDJSON progress events over UNIX domain sockets, TCP, or file descriptors when executed by AI agents or supervisor orchestrators.
 - With `--json`, writes one result to stdout and diagnostics to stderr. Mix results include the source URL and ordered track statuses, output files, and errors; `--dry-run` returns a `preview` without downloading audio. Failed downloads remain visible in a `partial` result.
 - Missing targets, invalid candidate URLs or providers, dependency failures, and extraction or progress initialization errors return a JSON error result and a nonzero exit status. A failed download keeps its existing result without appending another JSON document.
-
-# Prerequisites
-
-- [`fetch-track`](https://github.com/alexgorbatchev/fetch-track-cli) (version 1.4.0 or newer) - Single-track acquisition engine.
-- [`yt-dlp`](https://github.com/yt-dlp/yt-dlp#installation) (version 2024.08.01 or newer) - YouTube comment and metadata extractor.
-- [`ffmpeg`](https://ffmpeg.org/download.html) (version 4.4 or newer) - Audio stream processing and transcoding.
 
 # Installation
 
@@ -45,10 +39,18 @@ Download the prebuilt archive for your platform from [GitHub Releases](https://g
 
 ```bash
 # Example for macOS (Apple Silicon):
-curl -sSL "https://github.com/alexgorbatchev/fetch-mix-cli/releases/latest/download/fetch-mix_darwin_arm64.tar.gz" | tar -xz
+curl -fsSL "https://github.com/alexgorbatchev/fetch-mix-cli/releases/download/v2.0.0/fetch-mix_2.0.0_darwin_arm64.tar.gz" | tar -xz
 chmod +x fetch-mix
+mkdir -p ~/.local/bin
 mv fetch-mix ~/.local/bin/
 ```
+
+# Setup
+
+- Install [`fetch-track`](https://github.com/alexgorbatchev/fetch-track-cli) version 1.4.0 or newer for single-track acquisition.
+- Install [`yt-dlp`](https://github.com/yt-dlp/yt-dlp#installation) version 2024.08.01 or newer for YouTube comments.
+- Install [`ffmpeg`](https://ffmpeg.org/download.html) version 4.4 or newer for audio processing.
+- Configure an AI provider using the [provider reference](skills/fetch-mix/SKILL.md#providers-and-environment).
 
 # Quick Start
 
@@ -76,10 +78,27 @@ fetch-mix deps install
 fetch-mix deps update
 
 # Upgrade CLI binary in-place
-fetch-mix upgrade
+fetch-mix self upgrade
+```
+
+Sample Output (dry-run with a two-track test set, excerpt):
+
+```text
+Target Directory  : 2024-01-02 - Test Set 2/
+Playlist File     : 2024-01-02 - Test Set 2/playlist.m3u
+Total Tracks      : 2
+Sources           : youtube,soundcloud
+
+Planned Track Downloads:
+  [00:00] 01 - Artist 1 - Track 1
+  [05:00] 02 - Artist 2 - Track 2
 ```
 
 # Options & Flags
+
+Global options are `--verbose` / `-v` and `--help` / `-h`. Root `--version` prints only the version. Run `fetch-mix skill` for installation instructions for the [agent usage skill](skills/fetch-mix/SKILL.md), including commands, aliases, environment configuration, and side effects.
+
+`fetch-mix` and `fetch-mix youtube` share the flags below, except `--interactive`, which belongs to the root command:
 
 | Flag | Short | Default | Description |
 | :--- | :--- | :--- | :--- |
@@ -106,6 +125,8 @@ The pipeline flags above also apply to `fetch-mix youtube`, except `--interactiv
 
 # Progress & IPC Telemetry
 
+Use `AGENT=1`, `true`, or `yes` for compact output and automatic first-result selection. Human mode offers selection with `--interactive`. Displayed home paths use `~`; filesystem operations and telemetry retain actual paths. Help and results use stdout, command errors use stderr. Dry-run can fetch tracklists, invoke AI, and populate caches, but does not download audio or write the output manifest or playlist.
+
 When executing `fetch-mix` from an AI agent or parent supervisor, stream NDJSON events over UNIX sockets, TCP, or file descriptors:
 
 ```bash
@@ -116,4 +137,4 @@ See [PROGRESS.md](PROGRESS.md) for full protocol specifications and event schema
 
 # License
 
-MIT License (c) 2026 Alex Gorbatchev
+[MIT License](LICENSE) (c) 2026 Alex Gorbatchev

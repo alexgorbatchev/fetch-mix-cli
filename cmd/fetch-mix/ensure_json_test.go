@@ -25,6 +25,8 @@ func TestEnsureDependencies_JSONAutoInstallVerifiesInstallation(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Chdir(t.TempDir())
+			t.Setenv("HOME", t.TempDir())
 			bin := t.TempDir()
 			t.Setenv("PATH", bin)
 			t.Setenv("XDG_DATA_HOME", t.TempDir())

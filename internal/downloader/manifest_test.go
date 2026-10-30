@@ -3,10 +3,84 @@ package downloader
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/types"
 )
+
+func TestResumeRequiresSameTracklist(t *testing.T) {
+	for _, field := range []string{"artist", "title", "order", "query", "timestamp", "mix", "count"} {
+		t.Run(field, func(t *testing.T) {
+			dir := t.TempDir()
+			tracks := []types.Track{{Artist: "A", Title: "One", RawString: "A - One"}, {Artist: "B", Title: "Two"}}
+			if _, err := LoadOrCreateManifest(dir, "Mix", tracks, nil); err != nil {
+				t.Fatal(err)
+			}
+			before, err := os.ReadFile(ManifestPath(dir))
+			if err != nil {
+				t.Fatal(err)
+			}
+			title := "Mix"
+			switch field {
+			case "artist":
+				tracks[0].Artist = "Other"
+			case "title":
+				tracks[0].Title = "Other"
+			case "order":
+				tracks[0], tracks[1] = tracks[1], tracks[0]
+			case "query":
+				tracks[0].RawString = "remix"
+			case "timestamp":
+				tracks[0].Timestamp = "10:00"
+			case "mix":
+				title = "Other"
+			case "count":
+				tracks = tracks[:1]
+			}
+			if _, err := LoadOrCreateManifest(dir, title, tracks, nil); err == nil || !strings.Contains(err.Error(), "different tracklist") {
+				t.Fatalf("expected mismatch, got %v", err)
+			}
+			after, err := os.ReadFile(ManifestPath(dir))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(before) != string(after) {
+				t.Fatal("mismatched manifest overwritten")
+			}
+		})
+	}
+}
+
+func TestResumeAfterMovingDirectory(t *testing.T) {
+	parent := t.TempDir()
+	oldDir, newDir := filepath.Join(parent, "old"), filepath.Join(parent, "new")
+	if err := os.Mkdir(oldDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	tracks := []types.Track{{Artist: "A", Title: "T"}}
+	if _, err := LoadOrCreateManifest(oldDir, "Mix", tracks, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(oldDir, newDir); err != nil {
+		t.Fatal(err)
+	}
+	m, err := LoadOrCreateManifest(newDir, "Mix", tracks, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.Tracks[0].Status = "failed"
+	if err := SaveManifest(m); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(ManifestPath(newDir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"status": "failed"`) {
+		t.Fatalf("state not saved at current destination: %s", data)
+	}
+}
 
 func TestManifestSaveAndLoad(t *testing.T) {
 	tempDir := t.TempDir()
@@ -97,10 +171,11 @@ func TestLoadOrCreateManifest_InvalidJSON(t *testing.T) {
 
 	tracks := []types.Track{{Artist: "A", Title: "B"}}
 	m, err := LoadOrCreateManifest(tempDir, "Title", tracks, nil)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if err == nil || m != nil {
+		t.Fatalf("expected damaged manifest to be rejected, got %v, %v", m, err)
 	}
-	if m == nil || len(m.Tracks) != 1 {
-		t.Errorf("expected new fallback manifest returned on corrupted read")
+	data, err := os.ReadFile(manifestFile)
+	if err != nil || string(data) != "{corrupted json" {
+		t.Fatalf("damaged manifest was changed: %q, %v", data, err)
 	}
 }

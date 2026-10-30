@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/alexgorbatchev/fetch-mix-cli/internal/display"
 	"io"
 	"net/url"
 	"os"
@@ -73,6 +74,7 @@ func runMain(ctx context.Context) int {
 			fmt.Fprintln(os.Stderr, "Operation canceled by user.")
 			return 130
 		}
+		display.Fprintf(os.Stderr, "Error: %v\n", err)
 		return 1
 	}
 	return 0
@@ -89,10 +91,11 @@ var resultWriter io.Writer = os.Stdout
 
 func newRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:          "fetch-mix <url|query>",
-		Short:        "Fetch, extract, and download entire DJ mix tracklists using fetch-track CLI",
-		Version:      version,
-		SilenceUsage: true,
+		Use:           "fetch-mix <url|query>",
+		Short:         "Fetch, extract, and download entire DJ mix tracklists using fetch-track CLI",
+		Version:       version,
+		SilenceUsage:  true,
+		SilenceErrors: true,
 		Long: `fetch-mix is a CLI tool for DJ sets and mix tracklists.
 It searches MixesDB, crawlable web mirrors, 1001tracklists, or YouTube comments (via multi-provider LLMs),
 parses tracklists deterministically, and downloads individual tracks using fetch-track CLI.`,
@@ -134,7 +137,9 @@ parses tracklists deterministically, and downloads individual tracks using fetch
 	rootCmd.AddCommand(newYouTubeCmd())
 	rootCmd.AddCommand(newAICmd())
 	rootCmd.AddCommand(newDepsCmd())
-	rootCmd.AddCommand(newUpgradeCmd())
+	selfCmd := &cobra.Command{Use: "self", Short: "Manage this executable"}
+	selfCmd.AddCommand(newUpgradeCmd())
+	rootCmd.AddCommand(selfCmd)
 
 	setupHelp(rootCmd)
 
@@ -233,7 +238,7 @@ func runAIList(cmd *cobra.Command) error {
 	}
 	if godeps.IsAgentMode() {
 		for _, s := range statuses {
-			fmt.Fprintf(diagnosticWriter(), "%s\t%s\t%s\t%s\n", s.ID, s.DefaultModel, s.EnvVar, s.Status)
+			display.Fprintf(diagnosticWriter(), "%s\t%s\t%s\t%s\n", s.ID, s.DefaultModel, s.EnvVar, s.Status)
 		}
 		return nil
 	}
@@ -246,13 +251,8 @@ func runAIList(cmd *cobra.Command) error {
 	if sep != "" {
 		fmt.Fprintln(diagnosticWriter(), sep)
 	}
-	fmt.Fprintf(diagnosticWriter(), "%-14s %-26s %-20s %s\n", "PROVIDER", "DEFAULT MODEL", "ENV VAR", "STATUS")
-	if subSep := ui.Separator("-", 50); subSep != "" {
-		fmt.Fprintln(diagnosticWriter(), subSep)
-	}
-
 	for _, s := range statuses {
-		fmt.Fprintf(diagnosticWriter(), "%-14s %-26s %-20s %s\n", s.ID, s.DefaultModel, s.EnvVar, s.Status)
+		display.Fprintf(diagnosticWriter(), "%s (%s)\n  Model: %s\n  Environment: %s\n", s.ID, s.Status, s.DefaultModel, s.EnvVar)
 	}
 
 	if sep != "" {
@@ -294,7 +294,7 @@ func runAIInspect(cmd *cobra.Command, providerName string) error {
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(found)
 	}
 	if godeps.IsAgentMode() {
-		fmt.Fprintf(diagnosticWriter(), "provider: %s\nname: %s\ndefault_model: %s\nenv_var: %s\nstatus: %s\n",
+		display.Fprintf(diagnosticWriter(), "provider: %s\nname: %s\ndefault_model: %s\nenv_var: %s\nstatus: %s\n",
 			found.ID, found.Name, found.DefaultModel, found.EnvVar, found.Status)
 		return nil
 	}
@@ -303,14 +303,14 @@ func runAIInspect(cmd *cobra.Command, providerName string) error {
 	if sep != "" {
 		fmt.Fprintln(diagnosticWriter(), sep)
 	}
-	fmt.Fprintf(diagnosticWriter(), "Provider Details: %s\n", found.Name)
+	display.Fprintf(diagnosticWriter(), "Provider Details: %s\n", found.Name)
 	if sep != "" {
 		fmt.Fprintln(diagnosticWriter(), sep)
 	}
-	fmt.Fprintf(diagnosticWriter(), "Provider ID    : %s\n", found.ID)
-	fmt.Fprintf(diagnosticWriter(), "Default Model  : %s\n", found.DefaultModel)
-	fmt.Fprintf(diagnosticWriter(), "Environment Var: %s\n", found.EnvVar)
-	fmt.Fprintf(diagnosticWriter(), "Status         : %s\n", found.Status)
+	display.Fprintf(diagnosticWriter(), "Provider ID    : %s\n", found.ID)
+	display.Fprintf(diagnosticWriter(), "Default Model  : %s\n", found.DefaultModel)
+	display.Fprintf(diagnosticWriter(), "Environment Var: %s\n", found.EnvVar)
+	display.Fprintf(diagnosticWriter(), "Status         : %s\n", found.Status)
 	if sep != "" {
 		fmt.Fprintln(diagnosticWriter(), sep)
 	}
@@ -374,15 +374,15 @@ func runDepsVerify(cmd *cobra.Command) error {
 	if isAgent {
 		for _, r := range reports {
 			if r.Satisfied {
-				fmt.Fprintf(diagnosticWriter(), "%s: ok (version %s, min %s)\n", r.Name, r.DetectedVersion, r.MinVersion)
+				display.Fprintf(diagnosticWriter(), "%s: ok (version %s, min %s)\n", r.Name, r.DetectedVersion, r.MinVersion)
 			} else if !r.Installed {
-				fmt.Fprintf(diagnosticWriter(), "%s: missing\n", r.Name)
+				display.Fprintf(diagnosticWriter(), "%s: missing\n", r.Name)
 			} else {
-				fmt.Fprintf(diagnosticWriter(), "%s: fail (version %s, min %s)\n", r.Name, r.DetectedVersion, r.MinVersion)
+				display.Fprintf(diagnosticWriter(), "%s: fail (version %s, min %s)\n", r.Name, r.DetectedVersion, r.MinVersion)
 			}
 		}
 		if err != nil {
-			fmt.Fprintf(diagnosticWriter(), "status: error\nerror: %v\n", err)
+			display.Fprintf(diagnosticWriter(), "status: error\nerror: %v\n", err)
 			return err
 		}
 		fmt.Fprintln(diagnosticWriter(), "status: ok")
@@ -391,11 +391,11 @@ func runDepsVerify(cmd *cobra.Command) error {
 
 	for _, r := range reports {
 		if r.Satisfied {
-			fmt.Fprintf(diagnosticWriter(), "%s: %s (min %s) [OK]\n", r.Name, r.DetectedVersion, r.MinVersion)
+			display.Fprintf(diagnosticWriter(), "%s: %s (min %s) [OK]\n", r.Name, r.DetectedVersion, r.MinVersion)
 		} else if !r.Installed {
-			fmt.Fprintf(diagnosticWriter(), "%s: missing in $PATH [FAIL] - %s\n", r.Name, r.Error)
+			display.Fprintf(diagnosticWriter(), "%s: missing in $PATH [FAIL] - %s\n", r.Name, r.Error)
 		} else {
-			fmt.Fprintf(diagnosticWriter(), "%s: %s (min %s) [FAIL] - %s\n", r.Name, r.DetectedVersion, r.MinVersion, r.Error)
+			display.Fprintf(diagnosticWriter(), "%s: %s (min %s) [FAIL] - %s\n", r.Name, r.DetectedVersion, r.MinVersion, r.Error)
 		}
 	}
 
@@ -415,15 +415,15 @@ func runDepsInstall(cmd *cobra.Command, args []string) error {
 	if len(args) > 0 {
 		for _, depName := range args {
 			if !isAgent {
-				fmt.Fprintf(diagnosticWriter(), "Installing %s...\n", depName)
+				display.Fprintf(diagnosticWriter(), "Installing %s...\n", depName)
 			}
 			if err := deps.InstallDependency(cmd.Context(), depName); err != nil {
 				return fmt.Errorf("installing %s: %w", depName, err)
 			}
 			if isAgent {
-				fmt.Fprintf(diagnosticWriter(), "OK: installed %s\n", depName)
+				display.Fprintf(diagnosticWriter(), "OK: installed %s\n", depName)
 			} else {
-				fmt.Fprintf(diagnosticWriter(), "[OK] %s installed successfully.\n", depName)
+				display.Fprintf(diagnosticWriter(), "[OK] %s installed successfully.\n", depName)
 			}
 		}
 		return nil
@@ -445,10 +445,10 @@ func runDepsInstall(cmd *cobra.Command, args []string) error {
 	} else {
 		if isAgent {
 			for _, depName := range installed {
-				fmt.Fprintf(diagnosticWriter(), "OK: installed %s\n", depName)
+				display.Fprintf(diagnosticWriter(), "OK: installed %s\n", depName)
 			}
 		} else {
-			fmt.Fprintf(diagnosticWriter(), "[OK] Successfully installed: %s\n", strings.Join(installed, ", "))
+			display.Fprintf(diagnosticWriter(), "[OK] Successfully installed: %s\n", strings.Join(installed, ", "))
 		}
 	}
 	return nil
@@ -463,15 +463,15 @@ func runDepsUpdate(cmd *cobra.Command, args []string) error {
 	if len(args) > 0 {
 		for _, depName := range args {
 			if !isAgent {
-				fmt.Fprintf(diagnosticWriter(), "Updating %s...\n", depName)
+				display.Fprintf(diagnosticWriter(), "Updating %s...\n", depName)
 			}
 			if err := deps.UpdateDependency(cmd.Context(), depName); err != nil {
 				return fmt.Errorf("updating %s: %w", depName, err)
 			}
 			if isAgent {
-				fmt.Fprintf(diagnosticWriter(), "OK: updated %s\n", depName)
+				display.Fprintf(diagnosticWriter(), "OK: updated %s\n", depName)
 			} else {
-				fmt.Fprintf(diagnosticWriter(), "[OK] %s updated successfully.\n", depName)
+				display.Fprintf(diagnosticWriter(), "[OK] %s updated successfully.\n", depName)
 			}
 		}
 		return nil
@@ -486,10 +486,10 @@ func runDepsUpdate(cmd *cobra.Command, args []string) error {
 	}
 	if isAgent {
 		for _, depName := range updated {
-			fmt.Fprintf(diagnosticWriter(), "OK: updated %s\n", depName)
+			display.Fprintf(diagnosticWriter(), "OK: updated %s\n", depName)
 		}
 	} else {
-		fmt.Fprintf(diagnosticWriter(), "[OK] Successfully updated: %s\n", strings.Join(updated, ", "))
+		display.Fprintf(diagnosticWriter(), "[OK] Successfully updated: %s\n", strings.Join(updated, ", "))
 	}
 	return nil
 }
@@ -497,7 +497,6 @@ func runDepsUpdate(cmd *cobra.Command, args []string) error {
 func newUpgradeCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:          "upgrade",
-		Aliases:      []string{"self-update", "update-self"},
 		Short:        "Upgrade fetch-mix binary to latest release",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -506,24 +505,24 @@ func newUpgradeCmd() *cobra.Command {
 			}
 			isAgent := godeps.IsAgentMode()
 			if !isAgent {
-				fmt.Fprintf(diagnosticWriter(), "Checking for newer fetch-mix release (current version: %s)...\n", version)
+				display.Fprintf(diagnosticWriter(), "Checking for newer fetch-mix release (current version: %s)...\n", version)
 			}
 			newVer, err := godeps.UpgradeSelf(cmd.Context(), "alexgorbatchev", "fetch-mix-cli", version)
 			if err != nil {
 				if strings.Contains(err.Error(), "already at the latest version") {
 					if isAgent {
-						fmt.Fprintf(diagnosticWriter(), "status: current\nversion: %s\n", version)
+						display.Fprintf(diagnosticWriter(), "status: current\nversion: %s\n", version)
 					} else {
-						fmt.Fprintf(diagnosticWriter(), "fetch-mix is already up to date (%s).\n", version)
+						display.Fprintf(diagnosticWriter(), "fetch-mix is already up to date (%s).\n", version)
 					}
 					return nil
 				}
 				return fmt.Errorf("upgrade failed: %w", err)
 			}
 			if isAgent {
-				fmt.Fprintf(diagnosticWriter(), "OK: upgraded fetch-mix to %s\n", newVer)
+				display.Fprintf(diagnosticWriter(), "OK: upgraded fetch-mix to %s\n", newVer)
 			} else {
-				fmt.Fprintf(diagnosticWriter(), "[OK] Successfully upgraded fetch-mix to version %s!\n", newVer)
+				display.Fprintf(diagnosticWriter(), "[OK] Successfully upgraded fetch-mix to version %s!\n", newVer)
 			}
 			return nil
 		},
@@ -615,7 +614,7 @@ func runMixPipeline(ctx context.Context, query string) (runErr error) {
 				Message: fmt.Sprintf("Searching for %q...", query),
 			})
 		}
-		fmt.Fprintf(diagnosticWriter(), "Searching for %q...\n", query)
+		display.Fprintf(diagnosticWriter(), "Searching for %q...\n", query)
 		results, err := search.SearchSet(ctx, query)
 		if err != nil {
 			return fmt.Errorf("search error: %w", err)
@@ -630,16 +629,22 @@ func runMixPipeline(ctx context.Context, query string) (runErr error) {
 
 		if len(results) == 1 {
 			chosenSet = results[0]
-			fmt.Fprintf(diagnosticWriter(), "Found set: %q\n", chosenSet.Title)
+			display.Fprintf(diagnosticWriter(), "Found set: %q\n", chosenSet.Title)
 		} else {
-			fmt.Fprintln(diagnosticWriter(), "\nMultiple sets found. Please choose one:")
+			if !godeps.IsAgentMode() {
+				fmt.Fprintln(diagnosticWriter(), "\nMatching sets:")
+			}
 			for i, r := range results {
-				fmt.Fprintf(diagnosticWriter(), "  [%d] %s\n", i+1, r.Title)
+				if godeps.IsAgentMode() {
+					display.Fprintf(diagnosticWriter(), "result: %d\t%s\n", i+1, r.Title)
+				} else {
+					display.Fprintf(diagnosticWriter(), "  [%d] %s\n", i+1, r.Title)
+				}
 			}
 
 			if interactive && !godeps.IsAgentMode() {
 				reader := bufio.NewReader(os.Stdin)
-				fmt.Fprintf(diagnosticWriter(), "Choose option (1-%d) [1]: ", len(results))
+				display.Fprintf(diagnosticWriter(), "Choose option (1-%d) [1]: ", len(results))
 				choiceStr, _ := reader.ReadString('\n')
 				choiceStr = strings.TrimSpace(choiceStr)
 				choiceNum, err := strconv.Atoi(choiceStr)
@@ -651,7 +656,7 @@ func runMixPipeline(ctx context.Context, query string) (runErr error) {
 			} else {
 				chosenSet = results[0]
 			}
-			fmt.Fprintf(diagnosticWriter(), "Selected: %q\n", chosenSet.Title)
+			display.Fprintf(diagnosticWriter(), "Selected: %q\n", chosenSet.Title)
 		}
 	}
 
@@ -662,7 +667,7 @@ func runMixPipeline(ctx context.Context, query string) (runErr error) {
 			Message: fmt.Sprintf("Scraping tracklist from %s", chosenSet.URL),
 		})
 	}
-	fmt.Fprintf(diagnosticWriter(), "\nScraping tracklist from: %s...\n", chosenSet.URL)
+	display.Fprintf(diagnosticWriter(), "\nScraping tracklist from: %s...\n", chosenSet.URL)
 	markdown, err := scraper.ScrapeSetWithCache(ctx, chosenSet.URL, noCache)
 	if err != nil {
 		return fmt.Errorf("scraping error: %w", err)
@@ -686,13 +691,13 @@ func runMixPipeline(ctx context.Context, query string) (runErr error) {
 
 	if !dryRun {
 		hasHours := downloader.HasHourTimestamps(tracks, skippedItems)
-		fmt.Fprintf(diagnosticWriter(), "\nFound %d tracks:\n", len(tracks))
+		display.Fprintf(diagnosticWriter(), "\nFound %d tracks:\n", len(tracks))
 		for _, tr := range tracks {
 			tsStr := downloader.NormalizeTimestamp(tr.Timestamp, hasHours)
 			if tsStr != "" {
-				fmt.Fprintf(diagnosticWriter(), "  [%s] %s - %s\n", tsStr, tr.Artist, tr.Title)
+				display.Fprintf(diagnosticWriter(), "  [%s] %s - %s\n", tsStr, tr.Artist, tr.Title)
 			} else {
-				fmt.Fprintf(diagnosticWriter(), "  %s - %s\n", tr.Artist, tr.Title)
+				display.Fprintf(diagnosticWriter(), "  %s - %s\n", tr.Artist, tr.Title)
 			}
 		}
 	}
@@ -750,7 +755,7 @@ func runYouTubePipeline(ctx context.Context, videoURL string) (runErr error) {
 		})
 	}
 
-	fmt.Fprintf(diagnosticWriter(), "Processing YouTube video tracklist comments: %s...\n", videoURL)
+	display.Fprintf(diagnosticWriter(), "Processing YouTube video tracklist comments: %s...\n", videoURL)
 	tracks, skippedItems, videoTitle, err := youtube.ProcessYouTubeComments(ctx, videoURL, noCache, llmProvider, llmModel)
 	if err != nil {
 		return fmt.Errorf("YouTube comments extraction failed: %w", err)
@@ -766,14 +771,14 @@ func runYouTubePipeline(ctx context.Context, videoURL string) (runErr error) {
 
 	if !dryRun {
 		hasHours := downloader.HasHourTimestamps(tracks, skippedItems)
-		fmt.Fprintf(diagnosticWriter(), "\nFound tracklist for: %q\n", videoTitle)
-		fmt.Fprintf(diagnosticWriter(), "Extracted %d tracks:\n", len(tracks))
+		display.Fprintf(diagnosticWriter(), "\nFound tracklist for: %q\n", videoTitle)
+		display.Fprintf(diagnosticWriter(), "Extracted %d tracks:\n", len(tracks))
 		for _, tr := range tracks {
 			tsStr := downloader.NormalizeTimestamp(tr.Timestamp, hasHours)
 			if tsStr != "" {
-				fmt.Fprintf(diagnosticWriter(), "  [%s] %s - %s\n", tsStr, tr.Artist, tr.Title)
+				display.Fprintf(diagnosticWriter(), "  [%s] %s - %s\n", tsStr, tr.Artist, tr.Title)
 			} else {
-				fmt.Fprintf(diagnosticWriter(), "  %s - %s\n", tr.Artist, tr.Title)
+				display.Fprintf(diagnosticWriter(), "  %s - %s\n", tr.Artist, tr.Title)
 			}
 		}
 	}

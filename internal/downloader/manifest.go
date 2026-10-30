@@ -44,11 +44,29 @@ func ManifestPath(targetDir string) string {
 // LoadOrCreateManifest loads an existing mix_manifest.json or creates a new one.
 func LoadOrCreateManifest(targetDir, mixTitle string, tracks []types.Track, skipped []types.SkippedItem) (*MixManifest, error) {
 	manifestFile := ManifestPath(targetDir)
-	if data, err := os.ReadFile(manifestFile); err == nil {
-		var m MixManifest
-		if json.Unmarshal(data, &m) == nil && len(m.Tracks) == len(tracks) {
-			return &m, nil
+	data, err := os.ReadFile(manifestFile)
+	if err == nil {
+		var m *MixManifest
+		if err := json.Unmarshal(data, &m); err != nil {
+			return nil, fmt.Errorf("invalid mix manifest %q; repair it or choose a new --out-dir: %w", manifestFile, err)
 		}
+		if m == nil || m.Tracks == nil {
+			return nil, fmt.Errorf("invalid mix manifest %q: missing tracks; repair it or choose a new --out-dir", manifestFile)
+		}
+		if !matchesTracklist(m, mixTitle, tracks) {
+			return nil, fmt.Errorf("output directory contains a different tracklist; choose a new --out-dir to preserve existing downloads")
+		}
+		for _, entry := range m.Tracks {
+			if entry.Status != "pending" && entry.Status != "completed" && entry.Status != "failed" {
+				return nil, fmt.Errorf("invalid mix manifest %q: track %d has unknown status %q", manifestFile, entry.Index, entry.Status)
+			}
+		}
+		m.TargetDir = targetDir
+		m.Skipped = skipped
+		return m, nil
+	}
+	if !os.IsNotExist(err) {
+		return nil, fmt.Errorf("reading mix manifest %q: %w", manifestFile, err)
 	}
 
 	entries := make([]TrackManifestEntry, len(tracks))
@@ -77,6 +95,19 @@ func LoadOrCreateManifest(targetDir, mixTitle string, tracks []types.Track, skip
 	}
 
 	return m, nil
+}
+
+func matchesTracklist(m *MixManifest, title string, tracks []types.Track) bool {
+	if m.MixTitle != title || len(m.Tracks) != len(tracks) {
+		return false
+	}
+	for i, tr := range tracks {
+		entry := m.Tracks[i]
+		if entry.Index != i+1 || entry.Artist != tr.Artist || entry.Title != tr.Title || entry.RawString != tr.RawString || entry.Timestamp != tr.Timestamp {
+			return false
+		}
+	}
+	return true
 }
 
 // SaveManifest writes the MixManifest to disk as targetDir/mix_manifest.json.

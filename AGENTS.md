@@ -1,5 +1,8 @@
 # AGENTS.md — fetch-mix-cli
 
+- **CLI operational skill:** Maintain `skills/fetch-mix/SKILL.md` in the same change as any command, argument, flag, default, environment variable, output, or side-effect change. Update its `last_modified` metadata and verify against the live command tree.
+- **CLI presentation:** Use cobra-help-tree/v2 for stdout help and agent skill alerts. Route terminal messages through internal/display so home paths fold to ~; preserve actual paths in filesystem operations, subprocess arguments, and telemetry. Keep commands subject-first, including `fetch-mix self upgrade`.
+
 Operational guidelines, architecture, and developer interface specs for AI agents interacting with or maintaining `fetch-mix`.
 
 ---
@@ -12,10 +15,13 @@ Operational guidelines, architecture, and developer interface specs for AI agent
 - **Tracklist Search & Discovery**: Native HTTP queries to MixesDB (MediaWiki Search API) and unblocked web mirrors (OpeningTrack, Tracklist.club) via WordPress REST APIs. Accepts 1001tracklists URLs by extracting set slugs and discovering mirrors.
 - **Multi-Provider LLM Integration**: Uses `github.com/zendev-sh/goai` to extract tracklists from comments and web sets across 25+ LLM providers (Ollama 1st priority, LiteLLM 2nd, Google Gemini 3rd, OpenAI 4th, Anthropic Claude, OpenRouter, DeepSeek, Groq, and custom OpenAI-compatible endpoints) with deterministic regex fallback.
 - **Intermediary Manifest & Resumable Downloads**: Saves a JSON manifest (`{mix-title}/mix_manifest.json`) tracking download status per track and mapping track indices to actual saved file names on disk. Automatically resumes interrupted downloads.
+- **Resume Identity:** Require matching mix name and ordered artist, title, raw query, timestamp, and index before reusing a manifest. Reject mismatches before downloading and preserve existing files and manifest. Resolve manifest writes against the current output directory.
+- **Download Failures:** Attempt remaining tracks, save partial results, include failures in terminal telemetry, and return an error for any failed download or playlist write so the CLI exits 1.
+- **Manifest integrity:** Reject unreadable or malformed existing manifests without overwriting them. Create a new manifest only when the file does not exist.
 - **Default Output Layout**: Downloads tracks into `cwd/{mix-title-from-youtube}/01 - Artist - Title.m4a` by default unless `--out-dir` / `-o` is provided.
 - **Dry-Run Preview (`--dry-run`)**: Parses tracklists and previews planned track output paths, filenames, and `.m3u` playlist structure without performing network downloads or writing files.
 - **Single-Track Delegation**: Delegates actual track downloads, audio stream checks, and cover art tagging to `fetch-track` CLI.
-- **Help Screens & Terminal Width**: CLI help output (`--help`) must display an aligned hierarchical tree view with `├─` and `╰─` glyphs powered by `github.com/alexgorbatchev/cobra-help-tree` (`cobrahelptree.Setup(rootCmd)`), with command descriptions automatically trimmed to the terminal width using ellipsis (`...`).
+- **Help Screens & Terminal Width**: CLI help output (`--help`) must display an aligned hierarchical tree view with `├─` and `╰─` glyphs powered by `github.com/alexgorbatchev/cobra-help-tree/v2` (`cobrahelptree.SetupWithOptions(rootCmd, ...)`), with command descriptions automatically trimmed to the terminal width using ellipsis (`...`).
 
 ---
 
@@ -106,16 +112,16 @@ fetch-mix deps update [dep...]
 
 ### Upgrade Subcommand
 ```bash
-fetch-mix upgrade
-# Aliases:
-fetch-mix self-update
-fetch-mix update-self
+fetch-mix self upgrade
 ```
 Upgrades the `fetch-mix` binary itself in-place from GitHub releases without using GitHub API.
 
 ### Flags
 | Flag | Short | Default | Description |
 | :--- | :--- | :--- | :--- |
+| `--json` | | `false` | Return one JSON result on stdout; diagnostics use stderr |
+| `--list-candidates` | | `false` | List source candidates without extraction or downloading |
+| `--candidate-url` | | `""` | Extract an exact selected HTTP(S) URL |
 | `--out-dir` | `-o` | `cwd/{mix-title}` | Custom output directory |
 | `--dry-run` | | `false` | Preview tracklist and download plan without downloading |
 | `--auto-install` | | `false` | Automatically install missing dependencies without prompting |

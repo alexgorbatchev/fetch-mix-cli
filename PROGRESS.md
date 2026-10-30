@@ -174,6 +174,8 @@ Emitted when a track is successfully downloaded, tagged, verified, and renamed.
 ### 5. `complete`
 Emitted when the entire mix acquisition finishes, including playlist generation.
 
+This event denotes termination, not necessarily success. When downloads fail, `summary.failed` is nonzero and the event includes an `error` string. Playlist-write failures also populate `error`, even when all downloads succeeded and `summary.failed` is zero. Remaining tracks are attempted before this summary; the CLI exits with code 1 and agent output reports `status: error`.
+
 ```json
 {
   "timestamp": "2026-08-25T14:40:00Z",

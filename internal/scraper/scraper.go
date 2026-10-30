@@ -12,6 +12,7 @@ import (
 
 	"github.com/JohannesKaufmann/html-to-markdown/v2"
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/cache"
+	"github.com/alexgorbatchev/fetch-mix-cli/internal/display"
 )
 
 const (
@@ -40,7 +41,7 @@ func ScrapeSetWithCache(ctx context.Context, urlStr string, noCache bool) (strin
 		cacheKey := fmt.Sprintf("scrape_%s.json", cache.HashKey(urlStr))
 		var cached cachedScrapedMarkdown
 		if c.Get(cacheKey, &cached) && cached.Markdown != "" {
-			fmt.Fprintf(os.Stderr, "Found cached markdown on disk for URL %q\n", urlStr)
+			display.Fprintf(os.Stderr, "Found cached markdown on disk for URL %q\n", urlStr)
 			return cached.Markdown, nil
 		}
 	}

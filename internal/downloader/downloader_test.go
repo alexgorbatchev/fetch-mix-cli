@@ -1,7 +1,9 @@
 package downloader
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -147,22 +149,63 @@ func TestFormatDuration(t *testing.T) {
 }
 
 func TestDownloadSetDryRun(t *testing.T) {
-	opts := DownloadOptions{
-		MixTitle:     "Bicep Essential Mix 2014",
-		Tracks:       []types.Track{{Artist: "Bicep", Title: "Track 1", RawString: "Bicep - Track 1", Timestamp: "00:00"}},
-		SkippedItems: []types.SkippedItem{{Timestamp: "01:00", RawText: "Intro", Reason: "intro marker"}},
-		OutputDir:    "",
-		DryRun:       true,
-		Sources:      "youtube",
-	}
+	for _, mode := range []string{"0", "1"} {
+		t.Run(mode, func(t *testing.T) {
+			t.Setenv("AGENT", mode)
+			t.Chdir(t.TempDir())
+			opts := DownloadOptions{
+				MixTitle:     "Bicep Essential Mix 2014",
+				Tracks:       []types.Track{{Artist: "Bicep", Title: "Track 1", RawString: "Bicep - Track 1", Timestamp: "00:00"}, {Artist: "Other", Title: "Track 2"}},
+				SkippedItems: []types.SkippedItem{{Timestamp: "01:00", RawText: "Intro", Reason: "intro marker"}},
+				OutputDir:    "",
+				DryRun:       true,
+				Sources:      "youtube",
+			}
 
-	err := DownloadSet(context.Background(), opts)
-	if err != nil {
-		t.Fatalf("DownloadSet() in dry-run mode returned error: %v", err)
+			r, w, err := os.Pipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer r.Close()
+			old := os.Stdout
+			os.Stdout = w
+			t.Cleanup(func() { os.Stdout = old })
+			done := make(chan string, 1)
+			go func() { var buf bytes.Buffer; _, _ = io.Copy(&buf, r); done <- buf.String() }()
+			reporter, err := progress.NewReporter(context.Background(), "stdout")
+			if err != nil {
+				t.Fatal(err)
+			}
+			opts.ProgressReporter = reporter
+			err = DownloadSet(context.Background(), opts)
+			if err != nil {
+				t.Fatalf("DownloadSet() in dry-run mode returned error: %v", err)
+			}
+			if err := reporter.Close(); err != nil {
+				t.Fatal(err)
+			}
+			if err := w.Close(); err != nil {
+				t.Fatal(err)
+			}
+			os.Stdout = old
+			out := <-done
+			for _, want := range []string{"Track 1", "Track 2", `"phase":"dry_run"`, `"status":"planned"`, `"type":"complete"`} {
+				if !strings.Contains(out, want) {
+					t.Errorf("missing %q: %s", want, out)
+				}
+			}
+			if mode == "0" && !strings.Contains(out, "intro marker") {
+				t.Errorf("missing skipped reason: %s", out)
+			}
+			if _, err := os.Stat(opts.MixTitle); !os.IsNotExist(err) {
+				t.Fatalf("dry run wrote output directory: %v", err)
+			}
+		})
 	}
 }
 
 func TestDownloadSet_ExecutionAndResume(t *testing.T) {
+	t.Setenv("AGENT", "0")
 	tempDir := t.TempDir()
 	outDir := filepath.Join(tempDir, "downloads")
 
@@ -203,16 +246,16 @@ func main() {
 		_ = os.WriteFile(filepath.Join(out, "Unprefixed Artist - Track 1.m4a"), []byte("audio"), 0644)
 	}
 
-	if progTarget != "" && strings.HasPrefix(progTarget, "unix://") {
-		addr := strings.TrimPrefix(progTarget, "unix://")
-		conn, err := net.Dial("unix", addr)
+	if progTarget != "" {
+		parts := strings.SplitN(progTarget, "://", 2)
+		conn, err := net.Dial(parts[0], parts[1])
 		if err == nil && conn != nil {
 			_, _ = fmt.Fprintln(conn, "{\"type\":\"phase_start\",\"phase\":\"search\"}")
 			_, _ = fmt.Fprintln(conn, "{\"type\":\"phase_start\",\"phase\":\"download\"}")
 			_, _ = fmt.Fprintln(conn, "{\"type\":\"phase_start\",\"phase\":\"verify\"}")
 			_, _ = fmt.Fprintln(conn, "{\"type\":\"phase_start\",\"phase\":\"metadata\"}")
-			_, _ = fmt.Fprintln(conn, "{\"type\":\"candidate_selected\",\"candidate\":{\"title\":\"Test Video\",\"duration\":200,\"source\":\"youtube\"}}")
-			_, _ = fmt.Fprintln(conn, "{\"type\":\"complete\",\"result\":{\"path\":\"Unprefixed Artist - Track 1.m4a\",\"title\":\"Track 1\",\"album\":\"Album 1\",\"releaseYear\":\"2024\",\"bandwidthRating\":\"High\",\"bandwidthHz\":20000,\"suggestedGainDb\":1.5}}")
+			_, _ = fmt.Fprintln(conn, "{\"type\":\"candidate_selected\",\"candidate\":{\"title\":\"Test Video\",\"duration_seconds\":200,\"source\":\"youtube\"}}")
+			_, _ = fmt.Fprintln(conn, "{\"type\":\"complete\",\"result\":{\"path\":\"Unprefixed Artist - Track 1.m4a\",\"title\":\"Track 1\",\"album\":\"Album 1\",\"release_year\":\"2024\",\"bandwidth_rating\":\"High\",\"bandwidth_hz\":20000,\"suggested_gain_db\":1.5}}")
 			_ = conn.Close()
 		}
 	}
@@ -262,6 +305,11 @@ func main() {
 	if err := DownloadSet(ctx, opts); err != nil {
 		t.Fatalf("DownloadSet resume failed: %v", err)
 	}
+	wrong := opts
+	wrong.MixTitle = "Unrelated set"
+	if err := DownloadSet(ctx, wrong); err == nil || !strings.Contains(err.Error(), "different tracklist") {
+		t.Fatalf("resume mismatch ignored: %v", err)
+	}
 
 	// 3. Interactive mode (agent=0)
 	t.Setenv("AGENT", "0")
@@ -279,7 +327,9 @@ func main() {
 			{Artist: "fail", Title: "fail", RawString: "fail"},
 		},
 	}
-	_ = DownloadSet(ctx, failOpts)
+	if err := DownloadSet(ctx, failOpts); err == nil || !strings.Contains(err.Error(), "1 of 1 tracks failed") {
+		t.Fatalf("missing failure result: %v", err)
+	}
 
 	// 5. Canceled context
 	canceledCtx, cancel := context.WithCancel(context.Background())
@@ -287,8 +337,11 @@ func main() {
 	_ = DownloadSet(canceledCtx, opts)
 
 	// 6. Progress reporting with live socket
-	sockPath := filepath.Join(tempDir, "mix_prog.sock")
-	listener, err := net.Listen("unix", sockPath)
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sockPath := "tcp://" + listener.Addr().String()
 	if err == nil && listener != nil {
 		defer listener.Close()
 		var events []progress.Event
@@ -315,6 +368,9 @@ func main() {
 		}()
 
 		reporter, repErr := progress.NewReporter(ctx, sockPath)
+		if repErr != nil || reporter == nil {
+			t.Fatalf("progress reporter: %v", repErr)
+		}
 		if repErr == nil && reporter != nil {
 			progOpts := DownloadOptions{
 				MixTitle:         "Progress Set",
@@ -322,13 +378,27 @@ func main() {
 				Tracks:           []types.Track{{Artist: "Artist", Title: "Track 1"}},
 				ProgressReporter: reporter,
 			}
-			_ = DownloadSet(ctx, progOpts)
+			if err := DownloadSet(ctx, progOpts); err != nil {
+				t.Fatal(err)
+			}
 			_ = reporter.Close()
 			<-done
 
 			mu.Lock()
 			if len(events) == 0 {
 				t.Errorf("expected progress events over socket, got none")
+			}
+			last := events[len(events)-1]
+			if last.Summary == nil || last.Summary.Downloaded != 1 {
+				t.Fatalf("missing download summary: %+v", last)
+			}
+			manifest, err := LoadOrCreateManifest(progOpts.OutputDir, progOpts.MixTitle, progOpts.Tracks, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			entry := manifest.Tracks[0]
+			if entry.ActualFile != "01 - Unprefixed Artist - Track 1.m4a" || entry.QualityRating != "High" || entry.GainOffsetDb != 1.5 {
+				t.Fatalf("lost delegated result: %+v", entry)
 			}
 			mu.Unlock()
 		}

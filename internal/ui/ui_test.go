@@ -48,16 +48,16 @@ func TestSeparator_TerminalBranches(t *testing.T) {
 		t.Errorf("expected width 80, got %d", len(s))
 	}
 
-	// Test wide terminal (clamped to 120)
+	// Test wide terminal (full width)
 	getSizeFunc = func(fd int) (int, int, error) { return 200, 24, nil }
-	if s := Separator("=", 50); len(s) != 120 {
-		t.Errorf("expected clamped width 120, got %d", len(s))
+	if s := Separator("=", 50); len(s) != 200 {
+		t.Errorf("expected full width 200, got %d", len(s))
 	}
 
 	// Test narrow terminal (< 20 fallback)
 	getSizeFunc = func(fd int) (int, int, error) { return 10, 24, nil }
-	if s := Separator("=", 50); len(s) != 50 {
-		t.Errorf("expected fallback width 50, got %d", len(s))
+	if s := Separator("=", 50); len(s) != 10 {
+		t.Errorf("expected narrow width 10, got %d", len(s))
 	}
 
 	// Test error from getSizeFunc

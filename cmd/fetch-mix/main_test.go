@@ -41,6 +41,7 @@ func setupMockLLMServer(t *testing.T) *httptest.Server {
 }
 
 func TestCLI_Subcommands(t *testing.T) {
+	localDependencies(t)
 	ctx := context.Background()
 
 	// 1. Version flag
@@ -160,7 +161,7 @@ func TestCLI_UpgradeSuccess(t *testing.T) {
 
 	ctx := context.Background()
 	cmd := newRootCmd()
-	cmd.SetArgs([]string{"upgrade"})
+	cmd.SetArgs([]string{"self", "upgrade"})
 	_ = cmd.ExecuteContext(ctx)
 }
 
@@ -329,8 +330,13 @@ func TestCLI_RunMixPipeline_SearchFlow(t *testing.T) {
 	t.Setenv("AGENT", "1")
 	cmd := newRootCmd()
 	cmd.SetArgs([]string{"--dry-run", "-p", "custom", "Test Mix Query"})
-	if err := cmd.ExecuteContext(ctx); err != nil {
-		t.Fatalf("search pipeline failed: %v", err)
+	output := captureCLIStdout(t, func() {
+		if err := cmd.ExecuteContext(ctx); err != nil {
+			t.Fatalf("search pipeline failed: %v", err)
+		}
+	})
+	if strings.Contains(output, "Please choose") || strings.Contains(output, "  [1]") || !strings.Contains(output, "result: 1\t") {
+		t.Fatalf("agent search output is not compact: %s", output)
 	}
 
 	// 2. Interactive flag enabled with valid choice "2"
