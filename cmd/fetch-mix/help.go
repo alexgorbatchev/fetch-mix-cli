@@ -1,11 +1,9 @@
 package main
 
 import (
-	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v2"
+	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v4"
 	"github.com/spf13/cobra"
 )
-
-const skillCommandOutput = "Install the fetch-mix skill using the Skills CLI:\n\n  npx skills add alexgorbatchev/fetch-mix-cli --skill fetch-mix\n\nSkill:\n\n  https://github.com/alexgorbatchev/fetch-mix-cli/tree/main/skills/fetch-mix\n"
 
 var techCatalog = cobrahelptree.TechCatalog{
 	"fetch-mix": {
@@ -64,7 +62,7 @@ func setupHelp(cmd *cobra.Command) {
 	if err := cobrahelptree.SetupWithOptions(cmd, cobrahelptree.HelpOptions{
 		Catalog: techCatalog,
 		Tree:    cobrahelptree.TreeOptions{HideGeneratedCommands: true},
-		Skill:   skillCommandOutput,
+		Skill:   cobrahelptree.SkillSource{Repository: "alexgorbatchev/fetch-mix-cli", Branch: "main"},
 	}); err != nil {
 		panic(err)
 	}

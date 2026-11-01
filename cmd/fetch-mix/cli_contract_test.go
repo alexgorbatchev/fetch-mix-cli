@@ -3,7 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
-	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v2"
+	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v4"
 	"io"
 	"os"
 	"path/filepath"

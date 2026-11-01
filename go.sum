@@ -2,8 +2,8 @@ github.com/JohannesKaufmann/dom v0.3.1 h1:J16l9JAHWgkFPR3VIPbQ1gvS0cWab6laK1q7PF
 github.com/JohannesKaufmann/dom v0.3.1/go.mod h1:BZPkf8ZeYrBgABjwJn9iiKt8aiCtkxpHkevms+Yp2DE=
 github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2 h1:XFJZFWESIWlUEHHjzBuv8RvrtCWnSGlimEX17ysSDb8=
 github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2/go.mod h1:BHWO8lJzttJLqwuV8Rb1B3OG2OSzLbssZDI1FRg2eAA=
-github.com/alexgorbatchev/cobra-help-tree/v2 v2.2.1 h1:8140hwsSJahR8gvFjG44hVvUDBQtU0qpKJefXasI0mE=
-github.com/alexgorbatchev/cobra-help-tree/v2 v2.2.1/go.mod h1:Vm/pvT2ktLcHypR7Nbru91OvoKMBukS2cVd7QhxsSOI=
+github.com/alexgorbatchev/cobra-help-tree/v4 v4.0.0 h1:lsgP09cFsQq25htGjEYvh8ATiBE7t7R7ECfJBe01QVU=
+github.com/alexgorbatchev/cobra-help-tree/v4 v4.0.0/go.mod h1:iW2OKycMBhufRu+sBuCIqV8uwzqLfLzz24zyP65j/cY=
 github.com/alexgorbatchev/godeps v1.1.0 h1:yLaSXmqiwB50RpNwJusRwHMhnWZJV65aIfHj1a2h8xI=
 github.com/alexgorbatchev/godeps v1.1.0/go.mod h1:wQ7Tf36bQCpQ61BodC1uivJVB0Xm9R+5qwBEo9TA6yk=
 github.com/clipperhouse/uax29/v2 v2.2.0 h1:ChwIKnQN3kcZteTXMgb1wztSgaU+ZemkgWdohwgs8tY=
