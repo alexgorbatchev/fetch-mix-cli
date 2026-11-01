@@ -21,7 +21,7 @@ Operational guidelines, architecture, and developer interface specs for AI agent
 - **Default Output Layout**: Downloads tracks into `cwd/{mix-title-from-youtube}/01 - Artist - Title.m4a` by default unless `--out-dir` / `-o` is provided.
 - **Dry-Run Preview (`--dry-run`)**: Parses tracklists and previews planned track output paths, filenames, and `.m3u` playlist structure without performing network downloads or writing files.
 - **Single-Track Delegation**: Delegates actual track downloads, audio stream checks, and cover art tagging to `fetch-track` CLI.
-- **Help Screens & Terminal Width**: CLI help output (`--help`) must display an aligned hierarchical tree view with `├─` and `╰─` glyphs powered by `github.com/alexgorbatchev/cobra-help-tree/v2` (`cobrahelptree.SetupWithOptions(rootCmd, ...)`), with command descriptions automatically trimmed to the terminal width using ellipsis (`...`).
+- **Help Screens & Terminal Width**: CLI help output (`--help`) must display an aligned hierarchical tree view with `├─` and `╰─` glyphs powered by `github.com/alexgorbatchev/cobra-help-tree/v2` (`cobrahelptree.SetupWithOptions(rootCmd, ...)`), with long help text wrapped to the terminal width and never truncated.
 
 ---
 
