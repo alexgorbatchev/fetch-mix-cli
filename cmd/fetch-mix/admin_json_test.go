@@ -16,6 +16,7 @@ import (
 func TestAdminJSONDependencies(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	t.Setenv("PATH", t.TempDir())
 	t.Setenv("AGENT", "0")
 	original := deps.RequiredDependencies
@@ -73,6 +74,55 @@ func TestAdminJSONDependencies(t *testing.T) {
 	result, err = run("update")
 	if err == nil || string(result["status"]) != `"error"` {
 		t.Fatalf("failed update: %s %v", result, err)
+	}
+}
+
+func TestAdminJSONInspectsCurrentManagedDependencies(t *testing.T) {
+	for _, managed := range []bool{false, true} {
+		t.Run(map[bool]string{false: "path", true: "managed"}[managed], func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			t.Setenv("XDG_CACHE_HOME", t.TempDir())
+			t.Setenv("XDG_DATA_HOME", t.TempDir())
+			t.Setenv("FETCH_MIX_DEV", "0")
+			t.Chdir(t.TempDir())
+			externalDir := t.TempDir()
+			t.Setenv("PATH", externalDir)
+			original := deps.RequiredDependencies
+			t.Cleanup(func() { deps.RequiredDependencies = original })
+			const name = "inspection-fixture"
+			deps.RequiredDependencies = []deps.Dependency{{Name: name, MinVersion: "1.0.0"}}
+			writeDependencyVersion(t, externalDir, name, "0.1.0")
+			dir := externalDir
+			if managed {
+				var err error
+				dir, err = deps.EnsureManagedBinDir()
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, version := range []string{"1.0.0", "2.0.0", "0.5.0"} {
+				writeDependencyVersion(t, dir, name, version)
+				// Each command starts with the same inherited PATH, as separate CLI invocations do.
+				t.Setenv("PATH", externalDir)
+				command := newRootCmd()
+				var out bytes.Buffer
+				command.SetOut(&out)
+				command.SetErr(&bytes.Buffer{})
+				command.SetArgs([]string{"--json", "dependencies", "verify"})
+				err := command.Execute()
+				var result dependencyJSONResult
+				if decodeErr := json.Unmarshal(out.Bytes(), &result); decodeErr != nil {
+					t.Fatalf("expected JSON, got %q: %v", out.String(), decodeErr)
+				}
+				if len(result.Dependencies) != 1 || result.Dependencies[0].DetectedVersion != version {
+					t.Fatalf("current version %s: %+v (%v)", version, result, err)
+				}
+				wantSatisfied := version != "0.5.0"
+				if result.Dependencies[0].Satisfied != wantSatisfied || (err == nil) != wantSatisfied {
+					t.Fatalf("current requirement status for %s: %+v (%v)", version, result, err)
+				}
+			}
+		})
 	}
 }
 

@@ -35,13 +35,11 @@ var RequiredDependencies = []Dependency{
 	},
 }
 
-// NewManager creates a godeps.Manager configured for fetch-mix.
+// NewManager checks current binaries unless a caller explicitly supplies a cache.
 func NewManager(c ...godeps.Cache) *godeps.Manager {
 	var cacheInst godeps.Cache
 	if len(c) > 0 && c[0] != nil {
 		cacheInst = c[0]
-	} else if defCache, err := cache.New(); err == nil {
-		cacheInst = defCache
 	}
 	return godeps.New(godeps.Config{
 		AppName:      "fetch-mix",
@@ -78,6 +76,9 @@ func CheckDependenciesWithRunner(ctx context.Context, runner CommandRunner, c *c
 }
 
 func VerifyDependencies(ctx context.Context, cacheInst ...*cache.Cache) ([]DependencyReport, error) {
+	if err := InitManagedPath(); err != nil {
+		return nil, err
+	}
 	var c godeps.Cache
 	if len(cacheInst) > 0 && cacheInst[0] != nil {
 		c = cacheInst[0]

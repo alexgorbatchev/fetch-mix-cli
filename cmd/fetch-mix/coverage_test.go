@@ -35,6 +35,21 @@ func localDependencies(t *testing.T) {
 	}
 }
 
+func localInstalledDependencies(t *testing.T) {
+	t.Helper()
+	localDependencies(t)
+	for _, dep := range deps.RequiredDependencies {
+		writeDependencyVersion(t, os.Getenv("PATH"), dep.Name, "9999.0.0")
+	}
+}
+
+func writeDependencyVersion(t *testing.T, dir, name, version string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\nprintf '"+version+"\\n'\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestDependencyCommandsLocal(t *testing.T) {
 	for _, mode := range []string{"0", "1"} {
 		for _, args := range [][]string{{"deps", "install"}, {"deps", "install", "fetch-track"}, {"deps", "update"}, {"deps", "update", "yt-dlp"}} {
@@ -97,16 +112,11 @@ func TestPipelinesDownloadAndReport(t *testing.T) {
 		t.Run(pipeline, func(t *testing.T) {
 			server := setupMockLLMServer(t)
 			defer server.Close()
-			localDependencies(t)
+			localInstalledDependencies(t)
 			t.Setenv("AGENT", "0")
 			c, err := cache.New()
 			if err != nil {
 				t.Fatal(err)
-			}
-			for _, name := range []string{"fetch-track", "yt-dlp", "ffmpeg"} {
-				if err := c.Put("godeps_"+name+".json", "9999.0.0"); err != nil {
-					t.Fatal(err)
-				}
 			}
 			if err := c.Put("yt_tracks_abcdefghijk.json", map[string]any{"videoTitle": "Fixture Mix", "tracks": []map[string]string{{"artist": "First", "title": "One", "timestamp": "01:05:00"}, {"artist": "Second", "title": "Two"}}}); err != nil {
 				t.Fatal(err)
@@ -117,7 +127,8 @@ func TestPipelinesDownloadAndReport(t *testing.T) {
 			}
 			t.Setenv("FETCH_MIX_TEST_OUTPUT", filepath.Join(out, "Fixture.m4a"))
 			bin := filepath.Join(strings.Split(os.Getenv("PATH"), string(os.PathListSeparator))[0], "fetch-track")
-			script := "#!/bin/sh\nprintf audio > \"$FETCH_MIX_TEST_OUTPUT\"\n"
+			const scriptHeader = "#!/bin/sh\nif [ \"$1\" = '--version' ]; then printf '9999.0.0\\n'; exit 0; fi\n"
+			script := scriptHeader + "printf audio > \"$FETCH_MIX_TEST_OUTPUT\"\n"
 			if pipeline == "playlist failure" {
 				if err := os.Mkdir(filepath.Join(out, "playlist.m3u"), 0700); err != nil {
 					t.Fatal(err)
@@ -125,7 +136,7 @@ func TestPipelinesDownloadAndReport(t *testing.T) {
 				t.Setenv("AGENT", "1")
 			}
 			if pipeline == "failure" {
-				script = "#!/bin/sh\nexit 1\n"
+				script = scriptHeader + "exit 1\n"
 				t.Setenv("AGENT", "1")
 			}
 			if err := os.WriteFile(bin, []byte(script), 0755); err != nil {

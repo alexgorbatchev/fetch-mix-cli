@@ -4,7 +4,7 @@ description: Discover DJ mix tracklists and download their tracks and playlists 
 author: alexgorbatchev
 metadata:
   created_on: 2026-10-18 09:57
-  last_modified: 2026-10-30 11:35
+  last_modified: 2026-11-03 07:04
   status: current
 ---
 
@@ -30,7 +30,7 @@ AGENT=1 fetch-mix youtube --dry-run -p ollama "https://www.youtube.com/watch?v=N
 | `fetch-mix ai list` | Alias `ls`; list detection status and default model in provider priority order. |
 | `fetch-mix ai inspect <provider>` | Aliases `show`, `get`; inspect one provider's configuration. Exactly one provider is required. |
 | `fetch-mix dependencies` | Alias `deps`; verify fetch-track >=1.4.0, yt-dlp >=2024.08.01, ffmpeg >=4.4. |
-| `fetch-mix dependencies verify` | Verify installed dependencies and minimum versions. |
+| `fetch-mix dependencies verify` | Probe current installed dependencies and minimum versions, checking the managed binary directory before PATH. Version checks do not reuse cached results. |
 | `fetch-mix dependencies install [dep...]` | Install missing named dependencies; omitted names select all. |
 | `fetch-mix dependencies update [dep...]` | Update named dependencies; omitted names select all. |
 | `fetch-mix self` | Display executable management help. |

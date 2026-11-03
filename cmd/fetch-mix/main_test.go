@@ -429,26 +429,16 @@ func TestCLI_PipelineExtraErrors(t *testing.T) {
 
 func TestEnsureDependencies_Direct(t *testing.T) {
 	ctx := context.Background()
-	tempDir := t.TempDir()
-	t.Setenv("FETCH_MIX_DEV", "0")
-	t.Setenv("XDG_CACHE_HOME", tempDir)
+	localInstalledDependencies(t)
+	bin := os.Getenv("PATH")
 
 	// 1. All satisfied
-	c, _ := cache.New()
-	if c != nil {
-		_ = c.Put("godeps_fetch-track.json", "2.0.0")
-		_ = c.Put("godeps_yt-dlp.json", "2025.01.01")
-		_ = c.Put("godeps_ffmpeg.json", "ffmpeg version 6.0")
-	}
-
 	if err := ensureDependencies(ctx); err != nil {
 		t.Fatalf("ensureDependencies failed when satisfied: %v", err)
 	}
 
 	// 2. Missing/outdated dependencies in agent mode
-	_ = c.Put("godeps_fetch-track.json", "0.1.0")
-	_ = c.Put("godeps_yt-dlp.json", "2025.01.01")
-	_ = c.Put("godeps_ffmpeg.json", "ffmpeg version 6.0")
+	writeDependencyVersion(t, bin, "fetch-track", "0.1.0")
 
 	t.Setenv("AGENT", "1")
 	if err := ensureDependencies(ctx); err == nil {
@@ -501,18 +491,8 @@ func TestEnsureDependencies_Direct(t *testing.T) {
 }
 
 func TestEnsureDependencies_FormattedOutput(t *testing.T) {
-	tempDir := t.TempDir()
-	t.Setenv("FETCH_MIX_DEV", "0")
-	t.Setenv("XDG_CACHE_HOME", tempDir)
-
-	c, _ := cache.New()
-	if c != nil {
-		_ = c.Put("godeps_fetch-track.json", "1.0.0") // Outdated (min 1.4.0)
-		_ = c.Put("godeps_ffmpeg.json", "ffmpeg version 6.0")
-	}
-
-	canceledCtx, cancel := context.WithCancel(context.Background())
-	cancel()
+	localInstalledDependencies(t)
+	writeDependencyVersion(t, os.Getenv("PATH"), "fetch-track", "1.0.0")
 
 	t.Setenv("AGENT", "0")
 
@@ -533,7 +513,7 @@ func TestEnsureDependencies_FormattedOutput(t *testing.T) {
 		os.Stdin = oldStdin
 	}()
 
-	_ = ensureDependencies(canceledCtx)
+	_ = ensureDependencies(context.Background())
 	_ = wOut.Close()
 	if out := stdout(); out != "" {
 		t.Errorf("stdout = %q, want the prompt on stderr only", out)
