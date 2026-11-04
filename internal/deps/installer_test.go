@@ -62,7 +62,7 @@ func TestInitManagedPath(t *testing.T) {
 		{name: "outdated global copy yields to managed copy", global: "0.1.0", managed: "3.0.0", wantVersion: "3.0.0"},
 		{name: "outdated managed copy stays behind global copy", global: "0.1.0", managed: "0.2.0", wantVersion: "0.1.0"},
 		{name: "managed copy fills in a missing global copy", managed: "3.0.0", wantVersion: "3.0.0"},
-		{name: "managed package directory yields to outdated global copy", global: "0.1.0", managed: "3.0.0", packageDir: true, wantVersion: "3.0.0"},
+		{name: "managed package directory moves ahead of outdated global copy", global: "0.1.0", managed: "3.0.0", packageDir: true, wantVersion: "3.0.0"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

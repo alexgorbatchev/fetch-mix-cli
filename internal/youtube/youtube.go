@@ -151,7 +151,7 @@ func FetchVideoComments(ctx context.Context, videoURL string, noCache bool) (*yo
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	if err := cmd.Run(); err != nil {
+	if err := cmdutil.Run(cmd); err != nil {
 		if ctx.Err() != nil {
 			return nil, false, ctx.Err()
 		}

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/alexgorbatchev/fetch-mix-cli/internal/cmdutil"
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/display"
 	"io"
 	"net/url"
@@ -60,6 +61,7 @@ func main() {
 		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 		<-sigChan
 		fmt.Fprintln(os.Stderr, "\nForced termination requested. Exiting.")
+		cmdutil.KillRunning()
 		os.Exit(130)
 	}()
 

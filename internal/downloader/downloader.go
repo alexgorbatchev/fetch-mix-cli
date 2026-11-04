@@ -525,7 +525,7 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 			cmd.Stderr = &stderrBuf
 		}
 
-		cmdErr = cmd.Run()
+		cmdErr = cmdutil.Run(cmd)
 
 		if sockServer != nil {
 			_ = sockServer.Close()
