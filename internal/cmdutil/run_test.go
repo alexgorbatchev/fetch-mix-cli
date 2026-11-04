@@ -40,7 +40,7 @@ func TestRun(t *testing.T) {
 
 // A forced exit must not leave behind subprocesses that ignore SIGTERM.
 func TestKillRunningKillsProcessGroups(t *testing.T) {
-	fixture := proctest.NewGroupFixture(t, true)
+	fixture := proctest.NewGroupFixture(t, proctest.Survivors{Parent: true, Child: true})
 	done := make(chan error, 1)
 	go func() { done <- Run(godeps.CommandContext(context.Background(), fixture.Command)) }()
 	fixture.WaitReady(t)

@@ -11,9 +11,9 @@ import (
 	"time"
 )
 
-func startFixture(t *testing.T, survivesTerm bool) (*GroupFixture, *exec.Cmd) {
+func startFixture(t *testing.T, survivors Survivors) (*GroupFixture, *exec.Cmd) {
 	t.Helper()
-	f := NewGroupFixture(t, survivesTerm)
+	f := NewGroupFixture(t, survivors)
 	cmd := exec.Command(f.Command)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
@@ -25,7 +25,7 @@ func startFixture(t *testing.T, survivesTerm bool) (*GroupFixture, *exec.Cmd) {
 }
 
 func TestGroupFixtureRecordsTermination(t *testing.T) {
-	f, cmd := startFixture(t, false)
+	f, cmd := startFixture(t, Survivors{})
 	if group := f.WaitReady(t); group != cmd.Process.Pid {
 		t.Fatalf("WaitReady() = %d, want the command's process group %d", group, cmd.Process.Pid)
 	}
@@ -45,7 +45,7 @@ func TestGroupFixtureRecordsTermination(t *testing.T) {
 func TestGroupFixtureCleanupKillsSurvivors(t *testing.T) {
 	var group int
 	t.Run("survives SIGTERM", func(t *testing.T) {
-		f, cmd := startFixture(t, true)
+		f, cmd := startFixture(t, Survivors{Parent: true, Child: true})
 		group = f.WaitReady(t)
 		if err := syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM); err != nil {
 			t.Fatal(err)

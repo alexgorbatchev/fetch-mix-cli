@@ -21,6 +21,10 @@ const (
 	readyTimeout = 10 * time.Second
 )
 
+// KillDelivery bounds how long a process may take to disappear once SIGKILL
+// has been sent to it.
+const KillDelivery = 500 * time.Millisecond
+
 // Members are the processes a GroupFixture command runs: the command itself
 // and a background child in the same process group.
 var Members = []string{"child", "parent"}
@@ -34,31 +38,33 @@ type GroupFixture struct {
 	group   int
 }
 
-// NewGroupFixture writes the fake command into a test-owned directory. When
-// survivesTerm is true, both processes keep running after SIGTERM, so only
-// SIGKILL can stop them; otherwise they exit on SIGTERM.
-func NewGroupFixture(t testing.TB, survivesTerm bool) *GroupFixture {
+// Survivors names the processes of a GroupFixture that keep running after
+// SIGTERM, so only SIGKILL can stop them. The others exit on SIGTERM.
+type Survivors struct {
+	Parent bool
+	Child  bool
+}
+
+// NewGroupFixture writes the fake command into a test-owned directory.
+func NewGroupFixture(t testing.TB, survivors Survivors) *GroupFixture {
 	t.Helper()
 	dir := t.TempDir()
 	if strings.Contains(dir, "'") {
 		t.Fatalf("temporary directory %q cannot be quoted for sh", dir)
 	}
-	onTerm := "exit 0"
-	if survivesTerm {
-		onTerm = ":"
-	}
 	member := filepath.Join(dir, "member")
-	// The pid is written through a rename so a reader never sees a partial file.
+	// $2 is "stay" for a member that survives SIGTERM. The pid is written
+	// through a rename so a reader never sees a partial file.
 	memberScript := "#!/bin/sh\n" +
 		"exec 2>/dev/null\n" +
 		"marks='" + dir + "'\n" +
-		"trap 'echo TERM >> \"$marks/$1.term\"; " + onTerm + "' TERM\n" +
+		"trap 'echo TERM >> \"$marks/$1.term\"; [ \"$2\" = stay ] || exit 0' TERM\n" +
 		"echo $$ > \"$marks/$1.pid.tmp\" && mv \"$marks/$1.pid.tmp\" \"$marks/$1.pid\"\n" +
 		"while :; do sleep 0.05; done\n"
 	command := filepath.Join(dir, "command")
 	commandScript := "#!/bin/sh\n" +
-		"'" + member + "' child &\n" +
-		"exec '" + member + "' parent\n"
+		"'" + member + "' child " + onTerm(survivors.Child) + " &\n" +
+		"exec '" + member + "' parent " + onTerm(survivors.Parent) + "\n"
 	for path, script := range map[string]string{member: memberScript, command: commandScript} {
 		if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 			t.Fatal(err)
@@ -67,6 +73,13 @@ func NewGroupFixture(t testing.TB, survivesTerm bool) *GroupFixture {
 	f := &GroupFixture{Command: command, marks: dir}
 	t.Cleanup(f.kill)
 	return f
+}
+
+func onTerm(survives bool) string {
+	if survives {
+		return "stay"
+	}
+	return "exit"
 }
 
 // WaitReady waits until both processes are running with their SIGTERM
