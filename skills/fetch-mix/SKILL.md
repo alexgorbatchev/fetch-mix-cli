@@ -4,7 +4,7 @@ description: Discover DJ mix tracklists and download their tracks and playlists 
 author: alexgorbatchev
 metadata:
   created_on: 2026-10-18 09:57
-  last_modified: 2026-11-03 07:04
+  last_modified: 2026-11-04 11:45
   status: current
 ---
 
@@ -86,14 +86,15 @@ Auto-selection uses the first detected provider in this order:
 
 OLLAMA_MODEL and LITELLM_MODEL override their default models. Explicit Ollama defaults to http://localhost:11434. LiteLLM resolves endpoint from LITELLM_BASE_URL, LITELLM_URL, LITELLM_API_BASE, then http://localhost:4000; credentials from LITELLM_API_KEY or LITELLM_KEY. Custom uses OPENAI_BASE_URL and OPENAI_API_KEY. Detection is based on configured variables, not a connectivity probe.
 
-AGENT values 1, true, yes enable agent mode. FETCH_MIX_PROGRESS_TARGET supplies progress destination after explicit flags. FETCH_MIX_DEV=1 or true, or an existing local .tmp directory, selects .tmp caching; otherwise caching uses the platform user cache directory under fetch-mix (XDG_CACHE_HOME on platforms honoring it). PATH locates external tools. Managed dependencies use XDG_DATA_HOME/fetch-mix/bin or ~/.local/share/fetch-mix/bin.
+AGENT values 1, true, yes enable agent mode. FETCH_MIX_PROGRESS_TARGET supplies progress destination after explicit flags. FETCH_MIX_DEV=1 or true, or an existing local .tmp directory, selects .tmp caching; otherwise caching uses the platform user cache directory under fetch-mix (XDG_CACHE_HOME on platforms honoring it). PATH locates external tools. Managed dependencies use XDG_DATA_HOME/fetch-mix/bin or ~/.local/share/fetch-mix/bin; yt-dlp installs there as its unpacked build in bin/yt-dlp/. A PATH copy meeting the minimum version wins; a managed copy is used only when that copy is missing or outdated.
 
 ## Output, errors, and side effects
 
 - Human output uses labeled provider entries and full-width terminal separators. Agent provider lists are TSV; pipeline results and status are compact lines. Help writes stdout; errors write stderr. Every agent help screen starts with a skill-reading alert. Displayed home paths use ~.
 - Search selects the first result unless human interactive selection is requested. Downloads run sequentially through fetch-track. Tracklist pages/comments may be sent to the selected AI provider; provider charges depend on that account.
 - Output contains numbered audio filenames, mix_manifest.json, and playlist.m3u. Resume requires the same mix name and ordered artist, title, search query, and timestamp values; completed nonempty files are skipped. A mismatch stops acquisition without replacing the manifest; select another --out-dir. Files and progress payloads contain actual paths; display folding changes presentation only.
-- Dry-run previews do not acquire audio or write the output manifest/playlist, but network and cache activity still occur. Dependency installation and self upgrade change installed executables.
+- Dry-run previews do not acquire audio or write the output manifest/playlist, but network and cache activity still occur. Dependency installation and self upgrade change installed executables; updating yt-dlp downloads its latest unpacked build again.
+- Interrupting a run sends SIGTERM to the yt-dlp or fetch-track process group and SIGKILL to members still running 5 seconds later. A second interrupt exits immediately. Send SIGINT or SIGTERM to fetch-mix itself, not to its children.
 - Progress streams NDJSON events over the requested transport. A progress setup error stops acquisition. The fetch-mix event protocol is independent of tag-track's job envelope.
 - Missing dependencies, invalid providers, empty search results, extraction failures, download failures, and playlist-write failures return errors. Failed downloads do not stop attempts for the remaining tracks; the command exits 1 after saving results. Agent output reports status: error, and the final complete progress event includes error text and downloaded/failed counts. Retry the same set and destination after resolving the cause. Unreadable or malformed existing manifests are rejected without overwriting them; repair the manifest or choose a new output directory.
 

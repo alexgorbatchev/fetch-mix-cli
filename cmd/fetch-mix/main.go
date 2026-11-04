@@ -28,7 +28,7 @@ import (
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/types"
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/ui"
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/youtube"
-	"github.com/alexgorbatchev/godeps"
+	"github.com/alexgorbatchev/godeps/v2"
 )
 
 var (
@@ -410,7 +410,6 @@ func runDepsInstall(cmd *cobra.Command, args []string) error {
 	if jsonOutput {
 		return runDepsJSON(cmd, args, "install")
 	}
-	_ = deps.InitManagedPath()
 	isAgent := godeps.IsAgentMode()
 	if len(args) > 0 {
 		for _, depName := range args {
@@ -458,7 +457,6 @@ func runDepsUpdate(cmd *cobra.Command, args []string) error {
 	if jsonOutput {
 		return runDepsJSON(cmd, args, "update")
 	}
-	_ = deps.InitManagedPath()
 	isAgent := godeps.IsAgentMode()
 	if len(args) > 0 {
 		for _, depName := range args {
@@ -549,7 +547,7 @@ func resolveProgressReporter(ctx context.Context) (*progress.Reporter, error) {
 // every dependency.
 func ensureDependencies(ctx context.Context) error {
 	if jsonOutput && !autoInstall {
-		if err := deps.InitManagedPath(); err != nil {
+		if err := deps.InitManagedPath(ctx); err != nil {
 			return err
 		}
 		_, err := deps.NewManager().Verify(ctx)

@@ -4,7 +4,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/alexgorbatchev/godeps"
+	"github.com/alexgorbatchev/godeps/v2"
 	"golang.org/x/term"
 )
 

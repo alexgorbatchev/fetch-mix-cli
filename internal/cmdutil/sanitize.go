@@ -1,7 +1,7 @@
 package cmdutil
 
 import (
-	"github.com/alexgorbatchev/godeps"
+	"github.com/alexgorbatchev/godeps/v2"
 )
 
 // SanitizeStderr delegates to godeps.SanitizeStderr to clean raw error outputs.

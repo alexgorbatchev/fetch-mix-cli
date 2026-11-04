@@ -3,7 +3,7 @@ package deps
 import (
 	"context"
 
-	"github.com/alexgorbatchev/godeps"
+	"github.com/alexgorbatchev/godeps/v2"
 )
 
 // GetManagedBinDir returns the path to the fetch-mix managed binary directory.
@@ -16,9 +16,12 @@ func EnsureManagedBinDir() (string, error) {
 	return godeps.EnsureManagedBinDir("fetch-mix")
 }
 
-// InitManagedPath ensures the managed bin directory is prepended to process PATH.
-func InitManagedPath() error {
-	return godeps.InitManagedPath("fetch-mix")
+// InitManagedPath puts the managed directories on the process PATH so each
+// required dependency resolves to the copy the pipeline uses: a copy elsewhere
+// on PATH that meets the minimum version wins, and the managed copy takes over
+// only when that copy is missing or outdated.
+func InitManagedPath(ctx context.Context) error {
+	return NewManager().InitManagedPath(ctx)
 }
 
 // ResolveLatestTag queries the latest release tag for a GitHub repository.
@@ -34,16 +37,6 @@ func ResolveLatestTagWithBaseURL(ctx context.Context, baseURL, owner, repo strin
 // DownloadAndExtractGoBinary downloads and extracts a Go binary from GitHub releases.
 func DownloadAndExtractGoBinary(ctx context.Context, owner, repo, binName, targetDir string) error {
 	return godeps.DownloadAndExtractGoBinary(ctx, owner, repo, binName, targetDir)
-}
-
-// InstallYtDlp downloads the standalone yt-dlp binary into targetDir.
-func InstallYtDlp(ctx context.Context, targetDir string) error {
-	return godeps.InstallYtDlp(ctx, targetDir)
-}
-
-// UpdateYtDlp updates yt-dlp.
-func UpdateYtDlp(ctx context.Context, runner CommandRunner, targetDir string) error {
-	return godeps.UpdateYtDlp(ctx, runner, targetDir)
 }
 
 // InstallFFmpeg attempts to install ffmpeg using host package manager.

@@ -37,6 +37,7 @@ fetch-mix-cli/
     ├── downloader/         # Sequential download execution & .m3u playlist generation
     ├── llm/                # Multi-provider LLM integration via goai (Ollama, LiteLLM, Gemini, OpenAI, etc.)
     ├── parser/             # LLM-driven tracklist extraction with deterministic regex fallback
+    ├── proctest/           # Fake process-group commands for subprocess cancellation tests
     ├── progress/           # Socket progress listener & NDJSON streaming telemetry
     ├── scraper/            # Native HTTP fetching & HTML-to-Markdown / Wikitext extraction
     ├── search/             # Native MixesDB MediaWiki & WordPress REST API search
@@ -67,6 +68,10 @@ Verify dependency status at any time:
 ```bash
 fetch-mix dependencies
 ```
+
+- **Managed copies:** `godeps/v2` installs dependencies into `$XDG_DATA_HOME/fetch-mix/bin` or `~/.local/share/fetch-mix/bin`. `yt-dlp` is the unpacked build in the package directory `bin/yt-dlp/` (entry point `bin/yt-dlp/yt-dlp`); installing or updating it downloads the latest build and replaces an earlier one-file `bin/yt-dlp`. Never run `yt-dlp -U` or invoke a managed copy by absolute path.
+- **PATH precedence:** Put managed directories on `PATH` only through `deps.InitManagedPath(ctx)`, which uses `Manager.InitManagedPath`: a copy elsewhere on `PATH` meeting `MinVersion` wins, and a managed copy moves ahead only when that copy is missing or outdated. Verification, installs, and the pipeline must resolve the same copy.
+- **Subprocess cancellation:** Start external tools with `godeps.CommandContext`. On Unix it runs the tool in its own process group, sends SIGTERM to the group when the context ends, and sends SIGKILL to remaining members after 5 seconds; on Windows it kills the process. The group is outside the terminal's foreground group, so `main` cancels the root context on SIGINT/SIGTERM. Cancellation tests use the `internal/proctest` fake command.
 
 ---
 

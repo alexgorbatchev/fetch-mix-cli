@@ -15,6 +15,7 @@ import (
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/display"
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/llm"
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/types"
+	"github.com/alexgorbatchev/godeps/v2"
 )
 
 type CommentCandidate struct {
@@ -145,7 +146,7 @@ func FetchVideoComments(ctx context.Context, videoURL string, noCache bool) (*yo
 		videoURL,
 	}
 
-	cmd := cmdutil.NewCommand(ctx, ytdlpCmdName, args...)
+	cmd := godeps.CommandContext(ctx, ytdlpCmdName, args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

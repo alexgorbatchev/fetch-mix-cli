@@ -9,7 +9,7 @@ import (
 
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/cache"
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/deps"
-	"github.com/alexgorbatchev/godeps"
+	"github.com/alexgorbatchev/godeps/v2"
 )
 
 // Exercise the real manager and subprocess boundary with local executables.

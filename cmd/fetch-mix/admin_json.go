@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/deps"
-	"github.com/alexgorbatchev/godeps"
+	"github.com/alexgorbatchev/godeps/v2"
 	"github.com/spf13/cobra"
 )
 
@@ -26,28 +26,27 @@ type dependencyJSONResult struct {
 func runDepsJSON(cmd *cobra.Command, args []string, action string) error {
 	result := dependencyJSONResult{Status: "ok", Changed: []string{}}
 	var operationErr error
+	// The dependency manager refreshes PATH after every installation, and
+	// VerifyDependencies refreshes it before checking.
 	if action != "inspect" {
-		operationErr = deps.InitManagedPath()
-		if operationErr == nil {
-			if len(args) == 0 {
-				if action == "install" {
-					result.Changed, operationErr = deps.InstallMissingDependencies(cmd.Context())
-				} else {
-					result.Changed, operationErr = deps.UpdateAllDependencies(cmd.Context())
-				}
+		if len(args) == 0 {
+			if action == "install" {
+				result.Changed, operationErr = deps.InstallMissingDependencies(cmd.Context())
 			} else {
-				for _, name := range args {
-					var err error
-					if action == "install" {
-						err = deps.InstallDependency(cmd.Context(), name)
-					} else {
-						err = deps.UpdateDependency(cmd.Context(), name)
-					}
-					if err != nil {
-						operationErr = errors.Join(operationErr, err)
-					} else {
-						result.Changed = append(result.Changed, name)
-					}
+				result.Changed, operationErr = deps.UpdateAllDependencies(cmd.Context())
+			}
+		} else {
+			for _, name := range args {
+				var err error
+				if action == "install" {
+					err = deps.InstallDependency(cmd.Context(), name)
+				} else {
+					err = deps.UpdateDependency(cmd.Context(), name)
+				}
+				if err != nil {
+					operationErr = errors.Join(operationErr, err)
+				} else {
+					result.Changed = append(result.Changed, name)
 				}
 			}
 		}

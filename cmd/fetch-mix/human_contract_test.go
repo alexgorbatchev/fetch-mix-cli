@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/deps"
-	"github.com/alexgorbatchev/godeps"
+	"github.com/alexgorbatchev/godeps/v2"
 )
 
 func TestHumanAndAgentDiscovery(t *testing.T) {

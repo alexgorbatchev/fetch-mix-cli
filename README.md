@@ -29,6 +29,7 @@
 - Normalizes timestamp formats across the entire mix (automatically padding to `[hh:mm:ss]` if any track exceeds one hour).
 - Saves state in `mix_manifest.json` so repeat runs skip completed files. Any failed download or playlist write makes the command exit with code 1 after attempting the remaining tracks. Retry the same set to retry failed tracks. Unreadable or malformed existing manifests are rejected without overwriting them; repair the manifest or choose a new output directory.
 - Generates `playlist.m3u` using sanitized local file names matching the exact set sequence.
+- Pressing Ctrl+C asks `yt-dlp` and `fetch-track`, including any tools they started, to stop with SIGTERM so they can remove their temporary files, and kills whatever is still running 5 seconds later. A second Ctrl+C exits immediately without waiting.
 - Streams real-time NDJSON progress events over UNIX domain sockets, TCP, or file descriptors when executed by AI agents or supervisor orchestrators.
 - With `--json`, writes one result to stdout and diagnostics to stderr. Mix results include the source URL and ordered track statuses, output files, and errors; `--dry-run` returns a `preview` without downloading audio. Failed downloads remain visible in a `partial` result.
 - Missing targets, invalid candidate URLs or providers, dependency failures, and extraction or progress initialization errors return a JSON error result and a nonzero exit status. A failed download keeps its existing result without appending another JSON document.
@@ -50,6 +51,7 @@ mv fetch-mix ~/.local/bin/
 - Install [`fetch-track`](https://github.com/alexgorbatchev/fetch-track-cli) version 1.4.0 or newer for single-track acquisition.
 - Install [`yt-dlp`](https://github.com/yt-dlp/yt-dlp#installation) version 2024.08.01 or newer for YouTube comments.
 - Install [`ffmpeg`](https://ffmpeg.org/download.html) version 4.4 or newer for audio processing.
+- Alternatively, run `fetch-mix deps install` to install missing or outdated tools into `~/.local/share/fetch-mix/bin` (`$XDG_DATA_HOME/fetch-mix/bin` when set). `yt-dlp` installs there as its unpacked build in `bin/yt-dlp/`, which runs without unpacking itself into the system temporary directory; `fetch-mix deps update yt-dlp` downloads the latest build again. A copy elsewhere on your `PATH` that meets the minimum version is always used first; a managed copy is used only when that copy is missing or too old.
 - Configure an AI provider using the [provider reference](skills/fetch-mix/SKILL.md#providers-and-environment).
 
 # Quick Start

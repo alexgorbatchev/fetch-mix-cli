@@ -18,7 +18,7 @@ import (
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/progress"
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/types"
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/ui"
-	"github.com/alexgorbatchev/godeps"
+	"github.com/alexgorbatchev/godeps/v2"
 )
 
 type DownloadOptions struct {
@@ -513,7 +513,7 @@ func DownloadSet(ctx context.Context, opts DownloadOptions) error {
 			args = append(args, "--progress-target", sockTarget)
 		}
 
-		cmd := cmdutil.NewCommand(ctx, fetchTrackCmdName, args...)
+		cmd := godeps.CommandContext(ctx, fetchTrackCmdName, args...)
 		if isAgent {
 			cmd.Stdout = output
 			cmd.Stderr = os.Stderr

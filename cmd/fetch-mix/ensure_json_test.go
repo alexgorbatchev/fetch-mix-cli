@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/deps"
-	"github.com/alexgorbatchev/godeps"
+	"github.com/alexgorbatchev/godeps/v2"
 )
 
 // JSON callers read only the machine result from stdout, so auto-installation

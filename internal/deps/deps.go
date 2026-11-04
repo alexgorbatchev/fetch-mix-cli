@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/cache"
-	"github.com/alexgorbatchev/godeps"
+	"github.com/alexgorbatchev/godeps/v2"
 )
 
 type Dependency = godeps.Dependency
@@ -76,7 +76,7 @@ func CheckDependenciesWithRunner(ctx context.Context, runner CommandRunner, c *c
 }
 
 func VerifyDependencies(ctx context.Context, cacheInst ...*cache.Cache) ([]DependencyReport, error) {
-	if err := InitManagedPath(); err != nil {
+	if err := InitManagedPath(ctx); err != nil {
 		return nil, err
 	}
 	var c godeps.Cache

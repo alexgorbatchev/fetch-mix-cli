@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/alexgorbatchev/fetch-mix-cli/internal/deps"
-	"github.com/alexgorbatchev/godeps"
+	"github.com/alexgorbatchev/godeps/v2"
 )
 
 func TestAdminJSONDependencies(t *testing.T) {
@@ -114,8 +114,13 @@ func TestAdminJSONInspectsCurrentManagedDependencies(t *testing.T) {
 				if decodeErr := json.Unmarshal(out.Bytes(), &result); decodeErr != nil {
 					t.Fatalf("expected JSON, got %q: %v", out.String(), decodeErr)
 				}
-				if len(result.Dependencies) != 1 || result.Dependencies[0].DetectedVersion != version {
-					t.Fatalf("current version %s: %+v (%v)", version, result, err)
+				// An outdated managed copy never replaces another copy on PATH.
+				wantVersion := version
+				if managed && version == "0.5.0" {
+					wantVersion = "0.1.0"
+				}
+				if len(result.Dependencies) != 1 || result.Dependencies[0].DetectedVersion != wantVersion {
+					t.Fatalf("current version %s: %+v (%v)", wantVersion, result, err)
 				}
 				wantSatisfied := version != "0.5.0"
 				if result.Dependencies[0].Satisfied != wantSatisfied || (err == nil) != wantSatisfied {
